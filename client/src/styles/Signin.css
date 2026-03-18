@@ -1,0 +1,41 @@
+.input-icon-wrapper {
+  position: relative;
+}
+
+.input-icon-wrapper input {
+  padding-right: 2.5rem; /* space for icon */
+}
+
+.input-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+  pointer-events: none; /* so the icon doesn't block typing */
+}
+
+@media (max-width: 768px) {
+  .responsive-padding {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+@media (min-width: 769px) {
+  .responsive-padding {
+    padding-left: 10rem !important;
+    padding-right: 10rem !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .adjust-heading-desktop {
+    margin-top: -4.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .adjust-heading-desktop {
+    margin-top: 0; /* Or adjust for mobile if needed */
+  }
+}
