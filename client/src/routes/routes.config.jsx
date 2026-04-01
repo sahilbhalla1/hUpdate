@@ -9,6 +9,11 @@ import ServiceTracking from "../pages/service_tracking/ServiceTracking";
 import ComplaintOrEscalation from "../pages/complaint_escalation/ComplaintOrEscalation";
 import TechValidationInternal from "../pages/tech_validation/TechValidationInternal";
 import TechValidation from "../pages/tech_validation/TechValidationExternal";
+import Categories from "../pages/Product_Master/Categories";
+import SubCategories from "../pages/Product_Master/SubCategories";
+import ModelSpecifications from "../pages/Product_Master/ModelSpecifications";
+import CustomerModels from "../pages/Product_Master/CustomerModels";
+import Products from "../pages/Product_Master/Products";
 
 export const dashboardRoutes = [
   {
@@ -56,6 +61,32 @@ export const dashboardRoutes = [
     path: "/tech-validation-ext",
     element: <TechValidation />,
     roles: [ROLES.ADMIN, ROLES.EXTERNAL],
+  },
+
+    {
+    path: "/product-master/categories",
+    element: <Categories/>,
+    roles: [ROLES.ADMIN],
+  },
+     {
+    path: "/product-master/sub-categories",
+    element: <SubCategories/>,
+    roles: [ROLES.ADMIN],
+  },
+    {
+    path: "/product-master/model-specifications",
+    element: <ModelSpecifications/>,
+    roles: [ROLES.ADMIN],
+  },
+    {
+    path: "/product-master/customer-models",
+    element: <CustomerModels/>,
+    roles: [ROLES.ADMIN],
+  },
+    {
+    path: "/product-master/products",
+    element: <Products/>,
+    roles: [ROLES.ADMIN],
   },
   {
     path: "*",

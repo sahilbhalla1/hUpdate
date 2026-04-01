@@ -178,23 +178,20 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-
-
-const AttachmentRow = ({ attachment, file, status, onUpload, disabled, validationRemark }) => {
+// ─── Attachment Row ─────────────────────────────────────────────────────────────
+const AttachmentRow = ({ attachment, file, status, onUpload, disabled }) => {
   const inputRef = useRef(null);
-  const reuploadRef = useRef(null);
   const Icon = attachment.icon;
-  const isAlreadyUploaded = file?.url;
-  const isRejected = status === "Rejected";
-  const isApproved = status === "Approved";
 
   return (
     <tr className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors group">
+      {/* S.No */}
       <td className="px-3 py-2 text-center">
         <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold inline-flex items-center justify-center">
           {attachment.sno}
         </span>
       </td>
+      {/* Attachment Type */}
       <td className="px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Icon size={13} className="text-blue-400 shrink-0" />
@@ -206,110 +203,53 @@ const AttachmentRow = ({ attachment, file, status, onUpload, disabled, validatio
           </div>
         )}
       </td>
+      {/* Type */}
       <td className="px-3 py-2">
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{attachment.type}</span>
       </td>
+      {/* Format */}
       <td className="px-3 py-2">
         <span className="text-[10px] text-gray-500 leading-relaxed">{attachment.formatDisplay}</span>
       </td>
+      {/* Size */}
       <td className="px-3 py-1.5">
         <span className="text-[10px] font-medium text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
           {attachment.sizeDisplay}
         </span>
       </td>
+      {/* Upload */}
       <td className="px-3 py-2">
-        {isAlreadyUploaded && !isRejected ? (
-          /* ── Already uploaded + NOT rejected: show Preview only ── */
-          <button
-            type="button"
-            onClick={() => window.open(file.url, "_blank")}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm transition-colors w-fit cursor-pointer"
-          >
-            <Eye size={10} />
-            Preview
-          </button>
-        ) : isRejected ? (
-          /* ── Rejected: show Preview (if file exists) + Reupload ── */
-          <div className="flex items-center gap-1.5">
-            {isAlreadyUploaded && (
-              <button
-                type="button"
-                onClick={() => window.open(file.url, "_blank")}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm transition-colors cursor-pointer"
-              >
-                <Eye size={10} />
-                Preview
-              </button>
-            )}
-            {/* Hidden reupload input */}
-            <input
-              ref={reuploadRef}
-              type="file"
-              accept={attachment.accept === "*" ? undefined : attachment.accept}
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                if (f.size > attachment.maxSize) {
-                  toast.error(`${attachment.label}: File too large. Max ${attachment.sizeDisplay}`);
-                  e.target.value = "";
-                  return;
-                }
-                onUpload(attachment.sno, f);
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => reuploadRef.current?.click()}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-red-500 hover:bg-red-600 text-white shadow-sm transition-colors cursor-pointer animate-pulse"
-            >
-              <Upload size={10} />
-              Reupload
-            </button>
-          </div>
-        ) : (
-          /* ── Not yet uploaded: show Upload button ── */
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={attachment.accept === "*" ? undefined : attachment.accept}
-              className="hidden"
-              disabled={disabled}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                if (f.size > attachment.maxSize) {
-                  toast.error(`${attachment.label}: File too large. Max ${attachment.sizeDisplay}`);
-                  e.target.value = "";
-                  return;
-                }
-                onUpload(attachment.sno, f);
-              }}
-            />
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => inputRef.current?.click()}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer
-                ${disabled
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md active:scale-95"
-                }`}
-            >
-              <Upload size={10} />
-              Upload
-            </button>
-          </>
-        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept={attachment.accept === "*" ? undefined : attachment.accept}
+          className="hidden"
+          disabled={disabled}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            if (f.size > attachment.maxSize) {
+              toast.error(`${attachment.label}: File too large. Max ${attachment.sizeDisplay}`);
+              e.target.value = "";
+              return;
+            }
+            onUpload(attachment.sno, f);
+          }}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => inputRef.current?.click()}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer
+            ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md active:scale-95"}`}
+        >
+          <Upload size={10} />
+          {file ? "Replace" : "Upload"}
+        </button>
       </td>
+      {/* Status */}
       <td className="px-3 py-2">
         <StatusBadge status={status} />
-      </td>
-      <td className="px-3 py-2">
-        <span className="text-[11px] text-gray-700">
-          {validationRemark || "-"}
-        </span>
       </td>
     </tr>
   );
@@ -401,8 +341,9 @@ const TechValidationAttachmentRow = ({ attachment, decision, onDecisionChange, o
 
   return (
     <tr
-      className={`border-b border-gray-50 transition-colors group ${decisionVal === "APPROVED" ? "bg-emerald-50/40" : decisionVal === "REJECTED" ? "bg-red-50/40" : "hover:bg-blue-50/30"
-        }`}
+      className={`border-b border-gray-50 transition-colors group ${
+        decisionVal === "APPROVED" ? "bg-emerald-50/40" : decisionVal === "REJECTED" ? "bg-red-50/40" : "hover:bg-blue-50/30"
+      }`}
     >
       {/* S.No */}
       <td className="px-3 py-2 text-center">
@@ -457,20 +398,22 @@ const TechValidationAttachmentRow = ({ attachment, decision, onDecisionChange, o
           <button
             type="button"
             onClick={() => onDecisionChange(attachment.attachment_id, "APPROVED")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${decisionVal === "APPROVED"
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+              decisionVal === "APPROVED"
                 ? "bg-emerald-500 text-white border-emerald-500 shadow"
                 : "bg-white text-emerald-600 border-emerald-300 hover:bg-emerald-50"
-              }`}
+            }`}
           >
             <CheckCircle size={11} /> Approve
           </button>
           <button
             type="button"
             onClick={() => onDecisionChange(attachment.attachment_id, "DECLINED")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${decisionVal === "DECLINED"
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+              decisionVal === "DECLINED"
                 ? "bg-red-500 text-white border-red-500 shadow"
                 : "bg-white text-red-500 border-red-300 hover:bg-red-50"
-              }`}
+            }`}
           >
             <XCircle size={11} /> Decline
           </button>
@@ -479,16 +422,18 @@ const TechValidationAttachmentRow = ({ attachment, decision, onDecisionChange, o
       {/* Status Badge */}
       <td className="px-3 py-2">
         <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${decisionVal === "APPROVED"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${
+            decisionVal === "APPROVED"
               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
               : decisionVal === "DECLINED"
                 ? "bg-red-50 text-red-700 border-red-200"
                 : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}
+          }`}
         >
           <span
-            className={`w-1.5 h-1.5 rounded-full ${decisionVal === "APPROVED" ? "bg-emerald-400" : decisionVal === "DECLINED" ? "bg-red-400" : "bg-amber-400"
-              }`}
+            className={`w-1.5 h-1.5 rounded-full ${
+              decisionVal === "APPROVED" ? "bg-emerald-400" : decisionVal === "DECLINED" ? "bg-red-400" : "bg-amber-400"
+            }`}
           />
           {decisionVal === "APPROVED" ? "Approved" : decisionVal === "DECLINED" ? "Declined" : "Pending"}
         </span>
@@ -500,10 +445,11 @@ const TechValidationAttachmentRow = ({ attachment, decision, onDecisionChange, o
           value={remark}
           onChange={(e) => onDecisionChange(attachment.attachment_id, decisionVal, e.target.value)}
           placeholder={decisionVal === "DECLINED" ? "Rejection reason..." : "Optional remark"}
-          className={`w-full text-[10px] px-2 py-1 rounded-lg border outline-none focus:ring-1 transition-all ${decisionVal === "DECLINED"
+          className={`w-full text-[10px] px-2 py-1 rounded-lg border outline-none focus:ring-1 transition-all ${
+            decisionVal === "DECLINED"
               ? "border-red-300 focus:ring-red-300 bg-red-50 placeholder-red-300"
               : "border-gray-200 focus:ring-blue-300 bg-gray-50"
-            }`}
+          }`}
         />
       </td>
     </tr>
@@ -580,7 +526,6 @@ export default function TechValidation() {
   };
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
   const [loading, setLoading] = useState(false);
 
   // ── Ticket type ──────────────────────────────────────────────────────────────
@@ -647,16 +592,8 @@ export default function TechValidation() {
   const [attachmentFiles, setAttachmentFiles] = useState({}); // sno -> File
   const [attachmentStatuses, setAttachmentStatuses] = useState({}); // sno -> "Pending"|"Approved"|"Rejected"
 
-  const [localTicketId, setLocalTicketId] = useState(null);
-
-  // const urlTicketId = searchParams.get("id");
-  const urlTicketId = searchParams.get("id") || localTicketId;
-
-  console.log("url", urlTicketId);
-
+  const urlTicketId = searchParams.get("id");
   const isTechValidation = searchParams.get("techValidation") === "true";
-  console.log("validationhjd", isTechValidation);
-
 
   // ── Tech Validation: fetched attachments from API ─────────────────────────────
   const [fetchedAttachments, setFetchedAttachments] = useState([]);
@@ -1041,31 +978,19 @@ export default function TechValidation() {
   }, [urlTicketId]);
 
   // Fetch attachments for tech validation mode
-
-
-
   useEffect(() => {
-
-    if (!urlTicketId) return;
-
-
+    if (!isTechValidation || !urlTicketId) return;
     const fetchAttachments = async () => {
       try {
         setAttachmentsLoading(true);
-
         const res = await api.get(`/tickets/${urlTicketId}/attachments`);
-
         if (res.data.success) {
           setFetchedAttachments(res.data.data || []);
-
+          // Init decisions as PENDING
           const init = {};
           (res.data.data || []).forEach((a) => {
-            init[a.attachment_id] = {
-              decision: a.validation_status || "PENDING",
-              remark: a.validation_remark || "",
-            };
+            init[a.attachment_id] = { decision: a.validation_status || "PENDING", remark: a.validation_remark || "" };
           });
-
           setAttachmentDecisions(init);
         }
       } catch (err) {
@@ -1074,11 +999,12 @@ export default function TechValidation() {
         setAttachmentsLoading(false);
       }
     };
-
     fetchAttachments();
-  }, [urlTicketId]);
+  }, [isTechValidation, urlTicketId]);
 
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HCRM Search
+  // ─────────────────────────────────────────────────────────────────────────────
   const handleHcrmSearch = async () => {
     if (!ticketType) {
       toast.error("Please select a Ticket Type first");
@@ -1091,17 +1017,9 @@ export default function TechValidation() {
     try {
       setHcrmSearchLoading(true);
       const res = await api.get(`/tickets/${hcrmSearchQuery}/application-validation?applicationType=${ticketType}`);
-
       if (res.data.success) {
-        const ticketId = res.data.data?.ticket?.id;
-
-        bindTicketData(res.data.data, {
-          successMessage: `HCRM ticket ${hcrmSearchQuery} loaded successfully`,
-          ticketId: ticketId,
-        });
-      }
-
-      else {
+        bindTicketData(res.data.data, { successMessage: `HCRM ticket ${hcrmSearchQuery} loaded successfully` });
+      } else {
         toast.error("No data found for this HCRM ID");
       }
     } catch (err) {
@@ -1128,7 +1046,6 @@ export default function TechValidation() {
       setHcrmSearchLoading(false);
     }
   };
-
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Bind ticket data
@@ -1239,7 +1156,7 @@ export default function TechValidation() {
       ticketNumber: ticketData.ticketNumber,
       externalTicketNumber: ticketData.externalTicketNumber,
     }));
-    setLocalTicketId(ticketData.id);
+
     setPincodeData((prev) => ({ ...prev, pincode: customer.zipCode, city: customer.city, provinceCode: customer.province }));
     setIsTicketReadOnly(true);
     setInternalTicketType(ticketData.application_type);
@@ -1253,6 +1170,11 @@ export default function TechValidation() {
       if (res.data.success && res.data.customerExists) {
         const { products } = res.data.data;
         setCustomerProducts(products || []);
+        // Once real products loaded, find the real match and update selectedCustomerProduct
+        // const realMatch = (products || []).find((p) => p.productId === currentProductId);
+        // if (realMatch) {
+        //   setSelectedCustomerProduct(realMatch);
+        // }
         const realMatch = (products || []).find((p) => p.productId === currentProductId);
 
         if (realMatch) {
@@ -1328,7 +1250,7 @@ export default function TechValidation() {
     }
     if (name === "CONSULTING_TYPE") {
       // const obj = consultingTypes.find((item) => item.code === value);
-      const obj = consultingTypes.find((item) => Number(item.id) === Number(value));
+       const obj = consultingTypes.find((item) => Number(item.id) === Number(value));
       setValues((prev) => ({
         ...prev,
         CONSULTING_TYPE_CODE: value,
@@ -1592,7 +1514,7 @@ export default function TechValidation() {
     if (values.ORDER_TYPE_CODE === "ZSV1") return true;
     if (values.ORDER_TYPE_CODE === "ZWO3") return true;
     // const allowed = ["C02", "C05", "C10", "C11", "C12"];
-    const allowed = [2, 5, 10, 11, 12]; // example ids
+    const allowed = [2,5,10,11,12]; // example ids
 
     if (values.ORDER_TYPE_CODE === "ZWO4" && allowed.includes(Number(values.CONSULTING_TYPE_ID))) return true;
     return false;
@@ -1650,13 +1572,6 @@ export default function TechValidation() {
         return;
       }
     }
-
-    // ✅ Calculate hasReupload ONCE here — used in both modes
-    const hasReupload = Object.keys(attachmentFiles).some((sno) => {
-      const key = ALL_ATTACHMENTS.find((a) => a.sno === Number(sno))?.attachmentKey;
-      return fetchedAttachments.some((f) => f.attachment_type === key);
-    });
-
     // ── Tech Validation mode: no file uploads, hit both APIs ─────────────────────
     if (isTechValidation) {
       // Require all attachments to have a decision
@@ -1674,16 +1589,13 @@ export default function TechValidation() {
         return;
       }
 
-
-
       try {
         setLoading(true);
         values.agent_remarks = values.technician_remarks?.trim() || "";
         // 1️⃣ agent-remark — same fields as normal but plain JSON (no files)
         await api.patch(`/tickets/${values.ticketId}/agent-remark`, {
           agentRemark: values.technician_remarks,
-          // finalPayload: values,
-          finalPayload: { ...values, isReupload: hasReupload }, // ✅ include isReupload
+          finalPayload: values,
           applicationType: ticketType,
           IS_CONSULTING: true,
           isL1: false,
@@ -1716,7 +1628,6 @@ export default function TechValidation() {
     // ── Normal (external) mode ────────────────────────────────────────────────────
     const missingAttachments = visibleAttachments.filter((attachment) => {
       if (attachment.sno === 4) return false; // Others is optional
-      if (hasReupload && attachmentFiles[attachment.sno]) return false;
       return !attachmentFiles[attachment.sno];
     });
 
@@ -1728,15 +1639,12 @@ export default function TechValidation() {
       const formData = new FormData();
       values.agent_remarks = values.technician_remarks?.trim() || "";
       formData.append("agentRemark", values.technician_remarks);
-      formData.append("finalPayload", JSON.stringify({ ...values, isReupload: hasReupload }));
+      formData.append("finalPayload", JSON.stringify(values));
       formData.append("applicationType", ticketType === "Exchange" ? "EXCHANGE" : ticketType);
       formData.append("IS_CONSULTING", false);
       formData.append("isL1", false);
 
       Object.entries(attachmentFiles).forEach(([sno, file]) => {
-
-        // ✅ Skip fake file objects (already-uploaded files stored as {url, name})
-        if (file?.url) return;
         const attachmentConfig = ALL_ATTACHMENTS.find((a) => a.sno === Number(sno));
         formData.append("files", file);
         formData.append(
@@ -1791,51 +1699,6 @@ export default function TechValidation() {
     }));
   };
 
-
-  useEffect(() => {
-    if (!fetchedAttachments.length) return;
-
-    const statusMap = {};
-    const fileMap = {};
-
-    fetchedAttachments.forEach((a) => {
-      const match = ALL_ATTACHMENTS.find(
-        (item) => item.attachmentKey === a.attachment_type
-      );
-
-      if (match) {
-        const sno = match.sno;
-
-        // ✅ Status mapping
-        statusMap[sno] =
-          a.validation_status === "APPROVED"
-            ? "Approved"
-            : a.validation_status === "DECLINED"
-              ? "Rejected"
-              : "Pending";
-
-        // ✅ Fake file object (for UI display)
-        fileMap[sno] = {
-          name: a.file_name,
-          // url: a.file_path.replace(/\\/g, "/"),
-          url: a.file_path.replace(/\\/g, "/"),  // ← already there ✅
-          mime_type: a.mime_type,
-        };
-      }
-    });
-
-    setAttachmentStatuses(statusMap);
-    setAttachmentFiles(fileMap);
-  }, [fetchedAttachments]);
-
-
-  const hasRejectedPendingReupload = !isTechValidation && visibleAttachments.some((attachment) => {
-  const status = attachmentStatuses[attachment.sno];
-  const file = attachmentFiles[attachment.sno];
-  // Rejected = has a fetched attachment with DECLINED status but no new local File uploaded
-  return status === "Rejected" && !(file && !file.url);
-});
- 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1858,7 +1721,12 @@ export default function TechValidation() {
               </span>
             )}
           </div>
-
+          {/* {isTicketReadOnly && (
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Ticket #{selectedTicketId} loaded — Customer info is read-only, other fields editable
+            </span>
+          )} */}
           {/* Ticket Type + HCRM Search */}
           {isTechValidation ? null : (
             <div className="flex items-center gap-2">
@@ -1895,8 +1763,9 @@ export default function TechValidation() {
                   type="button"
                   onClick={handleHcrmSearch}
                   disabled={hcrmSearchLoading || !ticketType}
-                  className={`px-2.5 py-1.5 text-xs font-semibold text-white rounded-lg cursor-pointer transition-colors flex items-center gap-1 whitespace-nowrap ${hcrmSearchLoading || !ticketType ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
-                    }`}
+                  className={`px-2.5 py-1.5 text-xs font-semibold text-white rounded-lg cursor-pointer transition-colors flex items-center gap-1 whitespace-nowrap ${
+                    hcrmSearchLoading || !ticketType ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+                  }`}
                 >
                   {hcrmSearchLoading ? <CircularProgress size={12} color="inherit" /> : <Search size={12} />}
                   {hcrmSearchLoading ? "Searching..." : "Search"}
@@ -2131,7 +2000,23 @@ export default function TechValidation() {
                     value={values.WARRANTYPE}
                     onChange={handleChange}
                   />
+                  {/* <FormField
+                    label="Warranty Type"
+                    name="WARRANTYPE"
+                    type="select"
+                    options={["In Warranty", "Out Warranty"]}
+                    required
+                    value={values.WARRANTYPE}
+                    onChange={(e) => {
+                      const type = e.target.value;
 
+                      setValues((prev) => ({
+                        ...prev,
+                        WARRANTYPE: type,
+                        WARRANTYPEID: type === "Out Warranty" ? "O" : "I",
+                      }));
+                    }}
+                  /> */}
                 </div>
                 <button
                   type="button"
@@ -2142,7 +2027,9 @@ export default function TechValidation() {
                   {warrantyLoading ? "Checking..." : "Check Warranty"}
                 </button>
               </div>
-
+              {/* {values.WTY_END_DAY && (
+                <span className="text-[10px] text-blue-600 font-bold italic">Warranty Valid Until: {values.WTY_END_DAY}</span>
+              )} */}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -2196,8 +2083,8 @@ export default function TechValidation() {
                   label="Consulting Type"
                   name="CONSULTING_TYPE"
                   type="select"
-                  options={consultingTypes.map((item) => ({ label: item.name, value: item.id }))}
-                  value={values.CONSULTING_TYPE_ID}
+             options={consultingTypes.map((item) => ({ label: item.name, value: item.id }))}
+value={values.CONSULTING_TYPE_ID}
                   onChange={handleChange}
                   disabled
                 />
@@ -2337,7 +2224,7 @@ export default function TechValidation() {
             value={values.problem_note}
             onChange={handleChange}
             required
-          // readOnly
+            // readOnly
           />
           <FormField
             label={isTechValidation ? "Agent Remarks" : "Technician Remarks"}
@@ -2356,10 +2243,11 @@ export default function TechValidation() {
               <button
                 type="button"
                 onClick={() => setActiveBottomTab("attachments")}
-                className={`flex cursor-pointer items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 ${activeBottomTab === "attachments"
+                className={`flex cursor-pointer items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 ${
+                  activeBottomTab === "attachments"
                     ? "border-blue-500 text-blue-600 bg-blue-50/50"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                  }`}
+                }`}
               >
                 <Paperclip size={13} />
                 Attachments
@@ -2434,10 +2322,11 @@ export default function TechValidation() {
                             <div
                               className="h-full bg-linear-to-r from-emerald-400 to-blue-500 rounded-full transition-all duration-500"
                               style={{
-                                width: `${(Object.values(attachmentDecisions).filter((d) => d.decision !== "PENDING").length /
+                                width: `${
+                                  (Object.values(attachmentDecisions).filter((d) => d.decision !== "PENDING").length /
                                     Math.max(fetchedAttachments.length, 1)) *
                                   100
-                                  }%`,
+                                }%`,
                               }}
                             />
                           </div>
@@ -2470,8 +2359,6 @@ export default function TechValidation() {
                                   onDecisionChange={handleAttachmentDecisionChange}
                                   onPreview={(a) =>
                                     setPreviewItem({
-                                      // url: a.file_path.replace(/\\/g, "/"),
-                                      // url: a.file_path.replace(/\\/g, "/"),
                                       url: a.file_path.replace(/\\/g, "/"),
                                       mime_type: a.mime_type,
                                       file_name: a.file_name,
@@ -2486,96 +2373,83 @@ export default function TechValidation() {
                     )}
                   </div>
                 ) : /* ── Normal Upload Mode ─────────────────────────────────────────── */
-                  !ticketType ? (
-                    <div className="flex flex-col items-center justify-center py-10 gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                        <Paperclip size={18} className="text-gray-400" />
-                      </div>
-                      <p className="text-xs text-gray-400 font-medium">
-                        Please select a Ticket Type (DOA or Exchange) to view required attachments
-                      </p>
+                !ticketType ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                      <Paperclip size={18} className="text-gray-400" />
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-600">
-                            {ticketType === "Exchange" ? "3 attachments required" : "9 attachments required"}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ticketType === "Exchange" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}
-                          >
-                            {ticketType}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-400" /> Pending
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" /> Approved
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-red-400" /> Rejected
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-gray-200 overflow-hidden">
-                        <table className="w-full text-[11px]">
-                          <thead>
-                            <tr className="bg-linear-to-r from-blue-500 to-blue-600 text-white">
-                              <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wide w-10">S.No</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide">Attachment Type</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-20">Type</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide">Format Accepted</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-16">Size</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-24">Upload</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-24">Status</th>
-                              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide ">
-                                Remark
-                              </th>
-                            </tr>
-                          </thead>
-
-
-                          <tbody className="divide-y divide-gray-50 bg-white">
-                            {visibleAttachments.map((attachment) => {
-                              const fetched = fetchedAttachments.find(
-                                (f) => f.attachment_type === attachment.attachmentKey
-                              );
-
-                              return (
-                                <AttachmentRow
-                                  key={attachment.sno}
-                                  attachment={attachment}
-                                  file={attachmentFiles[attachment.sno]}
-                                  status={attachmentStatuses[attachment.sno] || (attachmentFiles[attachment.sno] ? "Pending" : undefined)}
-                                  validationRemark={fetched?.validation_remark || "-"}   // ← pass it here
-                                  onUpload={handleAttachmentUpload}
-                                  disabled={!isTicketReadOnly && !values.CUSTOMER_ID}
-                                />
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Upload progress summary */}
-                      <div className="mt-3 flex items-center gap-4">
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="h-full bg-linear-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500"
-                            style={{ width: `${(Object.keys(attachmentFiles).length / visibleAttachments.length) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-gray-500 whitespace-nowrap font-medium">
-                          {Object.keys(attachmentFiles).length} / {visibleAttachments.length} uploaded
+                    <p className="text-xs text-gray-400 font-medium">
+                      Please select a Ticket Type (DOA or Exchange) to view required attachments
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-600">
+                          {ticketType === "Exchange" ? "3 attachments required" : "9 attachments required"}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ticketType === "Exchange" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}
+                        >
+                          {ticketType}
                         </span>
                       </div>
+                      <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-amber-400" /> Pending
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" /> Approved
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-400" /> Rejected
+                        </span>
+                      </div>
+                    </div>
 
-                    </>
-                  )}
+                    <div className="rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="bg-linear-to-r from-blue-500 to-blue-600 text-white">
+                            <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wide w-10">S.No</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide">Attachment Type</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-20">Type</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide">Format Accepted</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-16">Size</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-24">Upload</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide w-24">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 bg-white">
+                          {visibleAttachments.map((attachment) => (
+                            <AttachmentRow
+                              key={attachment.sno}
+                              attachment={attachment}
+                              file={attachmentFiles[attachment.sno]}
+                              status={attachmentStatuses[attachment.sno] || (attachmentFiles[attachment.sno] ? "Pending" : undefined)}
+                              onUpload={handleAttachmentUpload}
+                              disabled={!isTicketReadOnly && !values.CUSTOMER_ID}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Upload progress summary */}
+                    <div className="mt-3 flex items-center gap-4">
+                      <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="h-full bg-linear-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500"
+                          style={{ width: `${(Object.keys(attachmentFiles).length / visibleAttachments.length) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500 whitespace-nowrap font-medium">
+                        {Object.keys(attachmentFiles).length} / {visibleAttachments.length} uploaded
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -2587,7 +2461,7 @@ export default function TechValidation() {
             <SecondaryButton onClick={clearTicketSelection} type="button">
               Reset
             </SecondaryButton>
-            <PrimaryButton type="submit" disabled={loading || isSaved || hasRejectedPendingReupload}>
+            <PrimaryButton type="submit" disabled={loading || isSaved}>
               {loading ? (
                 <CircularProgress size={17} color="inherit" />
               ) : (

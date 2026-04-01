@@ -25,6 +25,7 @@
     "react-error-boundary": "^6.0.2",
     "react-hook-form": "^7.67.0",
     "react-router-dom": "^7.9.6",
+    "react-select": "^5.10.2",
     "sonner": "^2.0.7",
     "tailwindcss": "^4.1.17"
   },

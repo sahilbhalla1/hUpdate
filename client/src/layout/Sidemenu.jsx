@@ -11,6 +11,10 @@ import {
   SquareChartGantt,
   Ticket,
   Users,
+  LayoutGrid,
+  Layers,
+  Settings2,
+  Package,
 } from "lucide-react";
 import { isAuth } from "../utils/helpers";
 
@@ -61,14 +65,16 @@ const MenuItem = ({ item, currentPath, isSubitemActive, onClick, isOpen, onToggl
             const isSubActive = checkActive(currentPath, subItem.path, contextFlags);
 
             return (
-              <div
+                <div
                 key={subItem.path}
                 onClick={() => onClick(subItem.path)}
-                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-all duration-200 rounded-md mx-2 ${
-                  isSubActive ? "bg-gray-300 text-[#1c2649] shadow-md" : "text-gray-300 hover:bg-gray-300/30 hover:text-white"
-                }`}
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-all duration-200 rounded-md mx-2 ${isSubActive
+                    ? "bg-gray-300 text-[#1c2649] shadow-md"
+                    : "text-gray-300 hover:bg-gray-300/30 hover:text-white"
+                  }`}
               >
-                <span className={`w-2 h-2 rounded-full ${isSubActive ? "bg-[#1c2649]" : "bg-gray-400"}`}></span>
+                {subItem.icon && <span>{subItem.icon}</span>} {/* ✅ icon added */}
+                {/* <span className={`w-2 h-2 rounded-full ${isSubActive ? "bg-[#1c2649]" : "bg-gray-400"}`}></span> */}
                 <span className="text-xs">{subItem.label}</span>
               </div>
             );
@@ -105,12 +111,13 @@ const Sidemenu = ({ isOpen }) => {
       icon: <Home size={16} />,
       allowedRoles: ["ADMIN", "L1", "L2", "L3"],
     },
-    {
+   {
       id: "tickets",
-      label: "Tickets",
+      label: "Create Ticket",
       icon: <Ticket size={16} />,
       allowedRoles: ["ADMIN", "L1"],
-      submenu: [{ path: "/tickets/create", label: "Create Ticket" }],
+      // submenu: [{ path: "/tickets/create", label: "Create Ticket" }],
+      path: "/tickets/create"
     },
     {
       id: "service-tracking",
@@ -154,6 +161,39 @@ const Sidemenu = ({ isOpen }) => {
       icon: <SquareChartGantt size={16} />,
       allowedRoles: ["ADMIN"],
     },
+    {
+      id: "product-master",
+      label: "Product Master",
+      icon: <LayoutGrid size={16} />, // ✅ changed icon
+      allowedRoles: ["ADMIN"],
+      submenu: [
+        {
+          path: "/product-master/categories",
+          label: "Categories",
+          icon: <LayoutGrid size={16} />,
+        },
+        {
+          path: "/product-master/sub-categories",
+          label: "Sub Categories",
+          icon: <Layers size={16} />,
+        },
+        {
+          path: "/product-master/model-specifications",
+          label: "Model Specifications",
+          icon: <Settings2 size={16} />,
+        },
+        {
+          path: "/product-master/customer-models",
+          label: "Customer Models",
+          icon: <Users size={16} />,
+        },
+        {
+          path: "/product-master/products",
+          label: "Products",
+          icon: <Package size={16} />,
+        },
+      ],
+    }
   ];
 
   /* ---------------- ROLE FILTER ---------------- */

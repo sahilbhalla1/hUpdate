@@ -19,8 +19,9 @@ const SectionHeader = ({ icon: Icon, title }) => (
     <h4 className="font-bold text-gray-800 uppercase text-xs tracking-wide">{title}</h4>
   </div>
 );
-
+  const allowedStatuses = ["assigned", "acknowledged"];
 export default function CreateTicket() {
+
   const INITIAL_VALUES = {
     END_COUNTRY: "India(IN)",
     END_USER_TYPE: "",
@@ -170,6 +171,44 @@ export default function CreateTicket() {
   const [timelineData, setTimelineData] = useState({});
   const [timelineLoading, setTimelineLoading] = useState(false);
 
+const [modelSearch, setModelSearch] = useState("");
+ 
+const [modelSearchLoading, setModelSearchLoading] = useState(false);
+
+const [srMode, setSrMode] = useState("EXISTING"); 
+// EXISTING | NEW
+
+const [existingSrList, setExistingSrList] = useState([]);
+const [selectedSrExternal, setSelectedSrExternal] = useState("");
+
+  const [phoneSearchLoading, setPhoneSearchLoading] = useState(false);
+ 
+const filteredServiceTypes = serviceTypes.filter((item) => {
+  if (values.Category_Code === "AC1") {
+    return true; // show all including 09
+  }
+
+  // for non-AC → remove 09
+  return item.service_type_code !== "09";
+});
+
+const fetchExistingSR = async (phone) => {
+  try {
+    const res = await api.get(`/tickets/service-requests?phone=${phone}`);
+
+    if (res.data.success) {
+      setExistingSrList(res.data.data);
+
+      console.log("data agya h ");
+      console.log(res.data.data);
+      console.log(res.data.data.length);
+      
+    }
+  } catch (err) {
+    console.error("SR fetch error", err);
+  }
+};
+
   const isL2 = searchParams.get("l2") === "true";
   const isL3 = searchParams.get("l3") === "true";
   const urlTicketId = searchParams.get("id");
@@ -279,7 +318,10 @@ export default function CreateTicket() {
 
   // ── Select ticket from history table (internal) ───────────────────────────
   const handleSelectTicket = async (ticket) => {
-    if (ticket.status?.toLowerCase() !== "assigned") return;
+    // if (ticket.status?.toLowerCase() !== "assigned") return;
+     if (!allowedStatuses.includes(ticket.status?.trim().toLowerCase())) {
+  return;
+}
 
     setSelectedTicketId(ticket.id);
     try {
@@ -298,6 +340,17 @@ export default function CreateTicket() {
       setTicketDetailsLoading(false);
     }
   };
+
+  useEffect(() => {
+  if (values.Category_Code !== "AC1" && values.SERVICE_TYPE_CODE === "09") {
+    setValues((prev) => ({
+      ...prev,
+      SERVICE_TYPE: "",
+      SERVICE_TYPE_CODE: "",
+      SERVICE_TYPE_ID: "",
+    }));
+  }
+}, [values.Category_Code]);
 
   // Fallback: if customerProducts loaded after ticket details, auto-select category
   useEffect(() => {
@@ -466,6 +519,7 @@ export default function CreateTicket() {
             setCustomerProducts(products || []);
             // Call the history API here as well
             fetchTicketHistoryByPhone(phoneFromUrl);
+            fetchExistingSR(phoneFromUrl);
             // If you still want auto-select behavior
             handleCustomerSelect(customer);
           } else {
@@ -521,44 +575,102 @@ export default function CreateTicket() {
     setSearchQuery(customerData.primaryPhone);
     fetchTicketHistoryByPhone(customerData.primaryPhone);
     setShowSearchResults(false);
+    fetchExistingSR(customerData.primaryPhone);
   };
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      const fetchCustomerData = async () => {
-        if (searchQuery.length === 10) {
-          try {
-            const res = await api.get(`/customers/by-phone/${searchQuery}`);
+  // useEffect(() => {
+  //   const delayDebounce = setTimeout(() => {
+  //     const fetchCustomerData = async () => {
+  //       if (searchQuery.length === 10) {
+  //         try {
+  //           const res = await api.get(`/customers/by-phone/${searchQuery}`);
 
-            if (res.data.success && res.data.customerExists) {
-              const { customer, products } = res.data.data;
-              setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
-              setFilteredCustomers([customer]);
-              setCustomerProducts(products || []);
-            } else {
-              // 🔥 IF NUMBER IS BEING CHANGED → CLEAR EVERYTHING
-              resetCustomerData();
-              setFilteredCustomers([]);
-              setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
-              toast.error("No data found for this phone number");
-            }
-          } catch (err) {
-            resetCustomerData();
-            setFilteredCustomers([]);
-            setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
-            toast.error("No data found for this phone number");
-          }
-        } else {
-          setFilteredCustomers([]);
-          setShowSearchResults(false);
-        }
-      };
+  //           if (res.data.success && res.data.customerExists) {
+  //             const { customer, products } = res.data.data;
+  //             setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+  //             setFilteredCustomers([customer]);
+  //             setCustomerProducts(products || []);
+  //           } else {
+  //             // 🔥 IF NUMBER IS BEING CHANGED → CLEAR EVERYTHING
+  //             resetCustomerData();
+  //             setFilteredCustomers([]);
+  //             setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+  //             toast.error("No data found for this phone number");
+  //           }
+  //         } catch (err) {
+  //           resetCustomerData();
+  //           setFilteredCustomers([]);
+  //           setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+  //           toast.error("No data found for this phone number");
+  //         }
+  //       } else {
+  //         setFilteredCustomers([]);
+  //         setShowSearchResults(false);
+  //       }
+  //     };
 
-      fetchCustomerData();
-    }, 400);
+  //     fetchCustomerData();
+  //   }, 400);
 
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery]);
+  //   return () => clearTimeout(delayDebounce);
+  // }, [searchQuery]);
+
+const handlePhoneSearch = async () => {
+ 
+    if (searchQuery.length !== 10) {
+ 
+      toast.error("Please enter a valid 10-digit phone number");
+ 
+      return;
+ 
+    }
+ 
+    try {
+ 
+      setPhoneSearchLoading(true);
+ 
+      const res = await api.get(`/customers/by-phone/${searchQuery}`);
+ 
+      if (res.data.success && res.data.customerExists) {
+ 
+        const { customer, products } = res.data.data;
+ 
+        setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+ 
+        setFilteredCustomers([customer]);
+ 
+        setCustomerProducts(products || []);
+ 
+        handleCustomerSelect(customer);
+ 
+      } else {
+        resetCustomerData();
+ 
+        setFilteredCustomers([]);
+ 
+        setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+ 
+        toast.error("No data found for this phone number");
+ 
+      }
+ 
+    } catch (err) {
+ 
+      resetCustomerData();
+ 
+      setFilteredCustomers([]);
+ 
+      setValues((prev) => ({ ...prev, END_TELEPHONE: searchQuery }));
+ 
+      toast.error("No data found for this phone number");
+ 
+    } finally {
+ 
+      setPhoneSearchLoading(false);
+ 
+    }
+ 
+  };
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -744,7 +856,8 @@ export default function CreateTicket() {
       ORDER_SOURCE: prev.ORDER_SOURCE, // preserve
       ORDER_SOURCE_ID: prev.ORDER_SOURCE_ID,
     }));
-
+setExistingSrList([]);
+setSelectedSrExternal("");
     setCustomerProducts([]);
     setSelectedCustomerProduct(null);
     setSubCategories([]);
@@ -871,6 +984,7 @@ export default function CreateTicket() {
               }));
             }
           }
+           fetchExistingSR(phoneFromUrl);
         }
         if (resOrderType.data.success) setOrderTypes(resOrderType.data.data);
       } catch (err) {
@@ -1002,6 +1116,24 @@ export default function CreateTicket() {
     fetchRepairs();
   }, [values.DEFECT_ID]);
 
+  const resetSymptomHierarchy = () => ({
+  SYMPTOM_1_CODE: "",
+  SYMPTOM_1_ID: "",
+  SYMPTOM_1: "",
+  SYMPTOM_2: "",
+  SYMPTOM_2_ID: "",
+  SYMPTOM_2_CODE: "",
+  SECTION: "",
+  SECTION_ID: "",
+  SECTION_CODE: "",
+  DEFECT: "",
+  DEFECT_ID: "",
+  DEFECT_CODE: "",
+  REPAIR: "",
+  REPAIR_CODE: "",
+  REPAIR_ID: "",
+});
+
   const handleChange = (e) => {
     // const { name, value } = e.target;
     const { name } = e.target;
@@ -1038,6 +1170,7 @@ export default function CreateTicket() {
     }
     if (name === "ORDER_TYPE") {
       const orderTypObj = orderTypes.find((item) => item.order_type === value);
+console.log(orderTypObj);
 
       setValues((prev) => ({
         ...prev,
@@ -1074,41 +1207,86 @@ export default function CreateTicket() {
         REPAIR_ID: "",
       }));
 
+        setSrMode("EXISTING");
+        setSelectedSrExternal("");
+
       return;
     }
     // Logic for Service Type to store the Code
+    // if (name === "SERVICE_TYPE") {
+    //   const serviceObj = serviceTypes.find((item) => item.service_type_name === value);
+    //   setValues((prev) => ({
+    //     ...prev,
+    //     [name]: value,
+    //     SERVICE_TYPE_CODE: serviceObj ? serviceObj.service_type_code : "",
+    //     SERVICE_TYPE_ID: serviceObj ? serviceObj.id : "",
+    //     CONSULTING_TYPE_CODE: "",
+    //     CONSULTING_TYPE: "",
+    //     COMPLAINT_TYPE_CODE: "",
+    //     COMPLAINT_TYPE: "",
+    //     COMPLAINT_TYPE_ID: "",
+    //     CONSULTING_TYPE_ID: "",
+    //     // Reset Section
+    //     SYMPTOM_1_CODE: "",
+    //     SYMPTOM_1_ID: "",
+    //     SYMPTOM_1: "",
+    //     SYMPTOM_2: "",
+    //     SYMPTOM_2_ID: "",
+    //     SYMPTOM_2_CODE: "",
+    //     SECTION: "",
+    //     SECTION_ID: "",
+    //     SECTION_CODE: "",
+    //     DEFECT: "",
+    //     DEFECT_ID: "",
+    //     DEFECT_CODE: "",
+    //     REPAIR: "",
+    //     REPAIR_CODE: "",
+    //     REPAIR_ID: "",
+    //   }));
+    //   return;
+    // }
     if (name === "SERVICE_TYPE") {
-      const serviceObj = serviceTypes.find((item) => item.service_type_name === value);
-      setValues((prev) => ({
-        ...prev,
-        [name]: value,
-        SERVICE_TYPE_CODE: serviceObj ? serviceObj.service_type_code : "",
-        SERVICE_TYPE_ID: serviceObj ? serviceObj.id : "",
-        CONSULTING_TYPE_CODE: "",
-        CONSULTING_TYPE: "",
-        COMPLAINT_TYPE_CODE: "",
-        COMPLAINT_TYPE: "",
-        COMPLAINT_TYPE_ID: "",
-        CONSULTING_TYPE_ID: "",
-        // Reset Section
-        SYMPTOM_1_CODE: "",
-        SYMPTOM_1_ID: "",
-        SYMPTOM_1: "",
-        SYMPTOM_2: "",
-        SYMPTOM_2_ID: "",
-        SYMPTOM_2_CODE: "",
-        SECTION: "",
-        SECTION_ID: "",
-        SECTION_CODE: "",
-        DEFECT: "",
-        DEFECT_ID: "",
-        DEFECT_CODE: "",
-        REPAIR: "",
-        REPAIR_CODE: "",
-        REPAIR_ID: "",
-      }));
-      return;
-    }
+  const serviceObj = serviceTypes.find((item) => item.service_type_name === value);
+
+  setValues((prev) => ({
+    ...prev,
+    [name]: value,
+    SERVICE_TYPE_CODE: serviceObj ? serviceObj.service_type_code : "",
+    SERVICE_TYPE_ID: serviceObj ? serviceObj.id : "",
+
+    // 🔥 FIX: only reset complaint when NOT escalation-new flow
+    ...(prev.ORDER_TYPE_CODE === "ZWO3" && srMode === "NEW"
+      ? {}
+      : {
+          COMPLAINT_TYPE_CODE: "",
+          COMPLAINT_TYPE: "",
+          COMPLAINT_TYPE_ID: "",
+        }),
+
+    CONSULTING_TYPE_CODE: "",
+    CONSULTING_TYPE: "",
+    CONSULTING_TYPE_ID: "",
+
+    // reset hierarchy
+    SYMPTOM_1_CODE: "",
+    SYMPTOM_1_ID: "",
+    SYMPTOM_1: "",
+    SYMPTOM_2: "",
+    SYMPTOM_2_ID: "",
+    SYMPTOM_2_CODE: "",
+    SECTION: "",
+    SECTION_ID: "",
+    SECTION_CODE: "",
+    DEFECT: "",
+    DEFECT_ID: "",
+    DEFECT_CODE: "",
+    REPAIR: "",
+    REPAIR_CODE: "",
+    REPAIR_ID: "",
+  }));
+
+  return;
+}
     // Logic for Consulting Type
     if (name === "CONSULTING_TYPE") {
       const consultingObj = consultingTypes.find((item) => item.id === Number(value));
@@ -1147,40 +1325,84 @@ export default function CreateTicket() {
     }
 
     // Logic for Complaint Type
+    // if (name === "COMPLAINT_TYPE") {
+    //   const complaintObj = complaintTypes.find((item) => item.code === value);
+
+    //   setValues((prev) => ({
+    //     ...prev,
+    //     COMPLAINT_TYPE_CODE: value,
+    //     COMPLAINT_TYPE: complaintObj?.name || "",
+    //     COMPLAINT_TYPE_ID: complaintObj?.id || "",
+    //     CONSULTING_TYPE_CODE: "",
+    //     CONSULTING_TYPE: "",
+    //     SERVICE_TYPE: "",
+    //     SERVICE_TYPE_CODE: "",
+    //     SERVICE_TYPE_ID: "",
+    //     CONSULTING_TYPE_ID: "",
+    //     // Reset Section
+    //     SYMPTOM_1_CODE: "",
+    //     SYMPTOM_1_ID: "",
+    //     SYMPTOM_1: "",
+    //     SYMPTOM_2: "",
+    //     SYMPTOM_2_ID: "",
+    //     SYMPTOM_2_CODE: "",
+    //     SECTION: "",
+    //     SECTION_ID: "",
+    //     SECTION_CODE: "",
+    //     DEFECT: "",
+    //     DEFECT_ID: "",
+    //     DEFECT_CODE: "",
+    //     REPAIR: "",
+    //     REPAIR_CODE: "",
+    //     REPAIR_ID: "",
+    //   }));
+
+    //   return;
+    // }
+
     if (name === "COMPLAINT_TYPE") {
-      const complaintObj = complaintTypes.find((item) => item.code === value);
+  const complaintObj = complaintTypes.find((item) => item.code === value);
 
-      setValues((prev) => ({
-        ...prev,
-        COMPLAINT_TYPE_CODE: value,
-        COMPLAINT_TYPE: complaintObj?.name || "",
-        COMPLAINT_TYPE_ID: complaintObj?.id || "",
-        CONSULTING_TYPE_CODE: "",
-        CONSULTING_TYPE: "",
-        SERVICE_TYPE: "",
-        SERVICE_TYPE_CODE: "",
-        SERVICE_TYPE_ID: "",
-        CONSULTING_TYPE_ID: "",
-        // Reset Section
-        SYMPTOM_1_CODE: "",
-        SYMPTOM_1_ID: "",
-        SYMPTOM_1: "",
-        SYMPTOM_2: "",
-        SYMPTOM_2_ID: "",
-        SYMPTOM_2_CODE: "",
-        SECTION: "",
-        SECTION_ID: "",
-        SECTION_CODE: "",
-        DEFECT: "",
-        DEFECT_ID: "",
-        DEFECT_CODE: "",
-        REPAIR: "",
-        REPAIR_CODE: "",
-        REPAIR_ID: "",
-      }));
+  setValues((prev) => ({
+    ...prev,
+    COMPLAINT_TYPE_CODE: value,
+    COMPLAINT_TYPE: complaintObj?.name || "",
+    COMPLAINT_TYPE_ID: complaintObj?.id || "",
 
-      return;
-    }
+    // 🔥 FIX: only reset service when NOT escalation-new flow
+    ...(prev.ORDER_TYPE_CODE === "ZWO3" && srMode === "NEW"
+      ? {}
+      : {
+          SERVICE_TYPE: "",
+          SERVICE_TYPE_CODE: "",
+          SERVICE_TYPE_ID: "",
+        }),
+
+    CONSULTING_TYPE_CODE: "",
+    CONSULTING_TYPE: "",
+    CONSULTING_TYPE_ID: "",
+
+    // reset hierarchy
+    SYMPTOM_1_CODE: "",
+    SYMPTOM_1_ID: "",
+    SYMPTOM_1: "",
+    SYMPTOM_2: "",
+    SYMPTOM_2_ID: "",
+    SYMPTOM_2_CODE: "",
+    SECTION: "",
+    SECTION_ID: "",
+    SECTION_CODE: "",
+    DEFECT: "",
+    DEFECT_ID: "",
+    DEFECT_CODE: "",
+    REPAIR: "",
+    REPAIR_CODE: "",
+    REPAIR_ID: "",
+  }));
+
+  return;
+}
+
     // ... rest of your existing handleChange logic
     setValues((prev) => {
       const updated = { ...prev, [name]: value };
@@ -1469,9 +1691,17 @@ export default function CreateTicket() {
           let statuses = res.data.data;
 
           // 🔥 If ZSV1 → only allow E0001
-          if (values.ORDER_TYPE_CODE === "ZSV1") {
-            statuses = statuses.filter((status) => status.status_code === "E0002");
-          }
+          // if (values.ORDER_TYPE_CODE === "ZSV1") {
+          //   statuses = statuses.filter((status) => status.status_code === "E0002");
+          // }
+
+                    if (values.ORDER_TYPE_CODE === "ZSV1") {
+  statuses = statuses.filter(
+    (status) =>
+      status.status_code === "E0002" ||
+      status.status_code === values.STATUS_CODE // keep existing status
+  );
+}
 
           setAvailableStatuses(statuses);
         }
@@ -1485,6 +1715,33 @@ export default function CreateTicket() {
 
     fetchStatuses();
   }, [values.ORDER_TYPE_CODE]);
+
+  useEffect(() => {
+  if (srMode === "EXISTING") {
+    setValues(prev => ({
+      ...prev,
+      SERVICE_TYPE: "",
+      SERVICE_TYPE_CODE: "",
+      SERVICE_TYPE_ID: "",
+    }));
+  }
+}, [srMode]);
+
+useEffect(() => {
+  if (values.ORDER_TYPE_CODE === "ZWO3") {
+    console.log("zw03 h ye");
+    console.log(existingSrList.length);
+    
+    if (existingSrList.length === 0) {
+      setSrMode("NEW");
+    }
+  }
+  console.log("changes h ye ");
+   console.log(existingSrList.length);
+   console.log("---------------------3-------------------");
+   
+  
+}, [existingSrList]);
 
   useEffect(() => {
     const fetchTicketStages = async () => {
@@ -1598,16 +1855,35 @@ export default function CreateTicket() {
     }
 
     // Mandatory Email
-    if (!values.END_EMAIL || !values.END_EMAIL.trim()) {
-      toast.error("Email is mandatory");
-      return;
-    }
-
-    // Email format validation
-    if (!validateEmail(values.END_EMAIL)) {
+    // if (!values.END_EMAIL || !values.END_EMAIL.trim()) {
+    //   toast.error("Email is mandatory");
+    //   return;
+    // }
+     if (values.END_EMAIL && !validateEmail(values.END_EMAIL)) {
       toast.error("Cannot save: Invalid Email Address");
       return;
     }
+ 
+    if (!values.END_CITY || !values.END_CITY.trim()) {
+      toast.error("City is mandatory");
+      return;
+    }
+ 
+    if (!values.END_PROVINCE || !values.END_PROVINCE.toString().trim()) {
+      toast.error("Province is mandatory");
+      return;
+    }
+
+    if (!values.END_ADDRESS1 || !values.END_ADDRESS1.trim()) {
+  toast.error("Address Line 1 is mandatory");
+  return;
+}
+
+    // Email format validation
+    // if (!validateEmail(values.END_EMAIL)) {
+    //   toast.error("Cannot save: Invalid Email Address");
+    //   return;
+    // }
 
     // --- Validation: Province must be 2 digits if zipcode is present ---
     if (values.END_ZIP_CODE) {
@@ -1650,6 +1926,23 @@ export default function CreateTicket() {
       toast.error("Service Type is mandatory for this Order Type");
       return;
     }
+
+    if (values.ORDER_TYPE_CODE === "ZWO3") {
+  if (srMode === "EXISTING" && !selectedSrExternal) {
+    toast.error("Select existing Service Request");
+    return;
+  }
+
+    if (!values.COMPLAINT_TYPE_ID) {
+    toast.error("Complaint Type is mandatory");
+    return;
+  }
+
+  if (srMode === "NEW" && !values.SERVICE_TYPE_ID) {
+    toast.error("Service Type is required to create SR");
+    return;
+  }
+}
 
     const mandatory = isSymptomSectionMandatory();
 
@@ -1713,7 +2006,15 @@ export default function CreateTicket() {
     const cleanedSocials = Object.fromEntries(
       Object.entries(values.END_Socials || {}).filter(([_, v]) => typeof v === "string" && v.trim() !== ""),
     );
-    const finalPayload = { ...values, END_Socials: cleanedSocials };
+    // const finalPayload = { ...values, END_Socials: cleanedSocials };
+    const finalPayload = {
+  ...values,
+  END_Socials: cleanedSocials,
+  srMode,
+  srExternalTicket: selectedSrExternal || null,
+  END_EMAIL: values.END_EMAIL?.trim() ? values.END_EMAIL : "xyz@gmail.com",
+};
+
     // --- UPDATE flow: ticket selected from history AND IS_CONSULTING is false ---
     if (selectedTicketId) {
       try {
@@ -1735,17 +2036,27 @@ export default function CreateTicket() {
     }
 
     // --- CREATE flow: no ticket selected OR IS_CONSULTING is true ---
-    try {
-      setLoading(true);
-      await createTicket(finalPayload);
-      toast.success("Ticket created successfully!");
-      setIsSaved(true);
-      fetchTicketHistoryByPhone(values.END_TELEPHONE);
-    } catch (error) {
-      toast.error(error.response?.data?.error || "Failed to create ticket");
-    } finally {
-      setLoading(false);
-    }
+try {
+  setLoading(true);
+  await createTicket(finalPayload);
+  toast.success("Ticket created successfully!");
+  setIsSaved(true);
+  fetchTicketHistoryByPhone(values.END_TELEPHONE);
+
+} catch (error) {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
+
+  if (status === 409 && data?.errorCode === "DUPLICATE_OPEN_TICKET") {
+    toast.error(data.message); // 🔥 show exact backend message
+  } else {
+    toast.error(data?.message || "Failed to create ticket");
+  }
+
+} finally {
+  setLoading(false);
+}
+
   };
 
   const isSymptomSectionMandatory = () => {
@@ -1762,7 +2073,7 @@ export default function CreateTicket() {
     if (values.ORDER_TYPE_CODE === "ZSV1") return true;
     if (values.ORDER_TYPE_CODE === "ZWO3") return true;
 
-    const allowedConsultingCodes = ["C02", "C05", "C10", "C11", "C12"];
+    // const allowedConsultingCodes = ["C02", "C05", "C10", "C11", "C12"];
  const allowedConsultingIds = [2, 5, 10,12]; // example IDs
      if (values.ORDER_TYPE_CODE === "ZWO4" && allowedConsultingIds.includes(Number(values.CONSULTING_TYPE_ID))) {
       return true;
@@ -1882,6 +2193,72 @@ export default function CreateTicket() {
     { key: "youtube", label: "YouTube", prefix: "" },
   ];
 
+  const searchModelNumber = async () => {
+  if (!modelSearch.trim()) {
+    toast.error("Enter model number");
+    return;
+  }
+ 
+  try {
+    setModelSearchLoading(true);
+ 
+    const res = await api.get(`/tickets/customer-model/search/${modelSearch}`);
+ 
+    if (res.data.success) {
+      const data = res.data.data;
+ 
+      setValues((prev) => ({
+        ...prev,
+        Category: data.category,
+        CATEGORY_ID: data.categoryId,
+        Category_Code: data.categoryCode,
+        SUB_CATEGORY_ID: data.subCategoryId,
+        MODEL_SPEC_ID: data.modelSpecId,
+        CUSTOMER_MODEL_ID: data.customerModelId,
+        CUSTOMER_MODEL: data.model_number,
+ 
+         ...resetSymptomHierarchy(),   // 🔥 reset here
+      }));
+ 
+      toast.success("Model found");
+    } else {
+      toast.error("Model not found");
+    }
+ 
+  } catch (err) {
+    console.error("Model search error:", err);
+    toast.error("Search failed");
+  } finally {
+    setModelSearchLoading(false);
+  }
+};
+
+
+useEffect(() => {
+  if (!values.STATUS_CODE || availableStatuses.length === 0) return;
+ 
+  const exists = availableStatuses.find(
+    (s) => s.status_code === values.STATUS_CODE
+  );
+ 
+  if (!exists) return;
+ 
+  setValues((prev) => {
+    if (
+      prev.STATUS_ID === exists.id &&
+      prev.STATUS === exists.status_description
+    ) {
+      return prev;
+    }
+ 
+    return {
+      ...prev,
+      STATUS: exists.status_description,
+      STATUS_ID: exists.id,
+    };
+  });
+}, [availableStatuses]);
+
   return (
     <div className="bg-linear-to-br from-gray-50 to-blue-50">
       <form onSubmit={handleSubmit} className="max-w-7xl mx-auto space-y-1.5">
@@ -1929,34 +2306,33 @@ export default function CreateTicket() {
               </label>
               <div className="relative">
                 <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
+               <input
+ 
                   type="text"
                   inputMode="numeric"
-                  placeholder="Search by phone..."
+                  placeholder="Enter phone number..."
                   maxLength={10}
-                  className="w-full pl-10 pr-10 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none transition-all"
+                  className="w-full pl-10 pr-20 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none transition-all"
                   value={searchQuery}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^0-9]/g, "");
                     setSearchQuery(value);
-                    // 🔥 IF NUMBER IS BEING CHANGED → CLEAR EVERYTHING
                     resetCustomerData();
                     setSelectedCustomerProduct(null);
-                    // Only show results if there is actual input content
-                    if (value.length >= 4) {
-                      setShowSearchResults(true);
-                    } else {
-                      setShowSearchResults(false);
-                    }
                   }}
-                  onFocus={() => searchQuery && setShowSearchResults(true)}
-                  onBlur={() => {
-                    // delay so click event on dropdown can fire first
-                    setTimeout(() => setShowSearchResults(false), 150);
-                  }}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handlePhoneSearch())}
                 />
+                  <button
+                  type="button"
+                  onClick={handlePhoneSearch}
+                  disabled={phoneSearchLoading}
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-semibold text-white rounded transition-colors flex items-center gap-1 ${phoneSearchLoading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"}`}
+                >
+                  {phoneSearchLoading ? <CircularProgress size={12} color="inherit" /> : <Search size={12} />}
+                  {phoneSearchLoading ? "..." : ""}
+                </button>
 
-                <Search size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                {/* <Search size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" /> */}
               </div>
               {showSearchResults && filteredCustomers.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
@@ -2026,7 +2402,7 @@ export default function CreateTicket() {
               />
             </div>
 
-            <FormField
+            {/* <FormField
               label="Email Address"
               onBlur={(e) => {
                 if (e.target.value && !validateEmail(e.target.value)) {
@@ -2039,6 +2415,20 @@ export default function CreateTicket() {
               onChange={handleChange}
               readOnly={isTicketReadOnly}
               required
+            /> */}
+            <FormField
+              label="Email Address"
+              onBlur={(e) => {
+                if (e.target.value && !validateEmail(e.target.value)) {
+                  toast.error("Please enter a valid email address");
+                }
+              }}
+              name="END_EMAIL"
+              type="email"
+              value={values.END_EMAIL}
+              onChange={handleChange}
+              readOnly={isTicketReadOnly}
+ 
             />
             <FormField
               label="Alternate Contact"
@@ -2068,8 +2458,8 @@ export default function CreateTicket() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <FormField label="City" name="END_CITY" value={pincodeData.city} onChange={handleChange} readOnly={isTicketReadOnly} />
-              <FormField label="Province" name="END_PROVINCE" value={pincodeData.provinceCode} onChange={handleChange} readOnly={true} />
+              <FormField label="City" name="END_CITY" value={pincodeData.city} onChange={handleChange} readOnly={isTicketReadOnly} required/>
+              <FormField label="Province" name="END_PROVINCE" value={pincodeData.provinceCode} onChange={handleChange} readOnly={true} required/>
             </div>
 
             <div className="space-y-2">
@@ -2077,9 +2467,28 @@ export default function CreateTicket() {
                 label="Address Line 1"
                 name="END_ADDRESS1"
                 value={values.END_ADDRESS1}
-                onChange={handleChange}
+                 onChange={(e) => {
+                  if (e.target.value.length <= 60) handleChange(e);
+                }}
                 readOnly={isTicketReadOnly}
+                required
               />
+               <div className="flex justify-between items-center mt-0.5">
+                {values.END_ADDRESS1?.length >= 60 && (
+                  <span className="text-red-500 text-[10px] font-medium">
+                    Maximum 60 characters allowed
+                  </span>
+                )}
+ 
+                <span
+                  className={`ml-auto text-[10px] ${values.END_ADDRESS1?.length >= 60
+                    ? "text-red-500 font-semibold"
+                    : "text-gray-400"
+                    }`}
+                >
+                  {values.END_ADDRESS1?.length || 0}/60
+                </span>
+              </div>
               <FormField
                 label="Address Line 2"
                 name="END_ADDRESS2"
@@ -2136,6 +2545,62 @@ export default function CreateTicket() {
               <FormField label="Customer ID" name="CUSTOMER_ID" disabled value={values?.CUSTOMER_ID} onChange={handleChange} />
               <FormField label="Product ID" name="PRODUCT_ID" disabled value={values.PRODUCT_ID} onChange={handleChange} />
             </div>
+
+             <div className="relative flex items-center">
+    <input
+      type="text"
+      placeholder="Enter model number..."
+      className="w-full px-2.5 pr-16 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 outline-none"
+      value={modelSearch}
+      onChange={(e) => setModelSearch(e.target.value.toUpperCase())}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          searchModelNumber();
+        }
+      }}
+    />
+ 
+    {/* Clear button */}
+    {modelSearch && (
+      <button
+        type="button"
+        onClick={() => {
+          setModelSearch("");
+ 
+          setValues((prev) => ({
+            ...prev,
+            Category: "",
+            CATEGORY_ID: "",
+            SUB_CATEGORY_ID: "",
+            MODEL_SPEC_ID: "",
+            CUSTOMER_MODEL_ID: "",
+            CUSTOMER_MODEL: "",
+          }));
+        }}
+        className="absolute right-10 text-gray-400 hover:text-gray-600"
+      >
+        ✕
+      </button>
+    )}
+ 
+    {/* Search button */}
+    <button
+      type="button"
+      onClick={searchModelNumber}
+      disabled={modelSearchLoading}
+      className={`absolute right-1 px-2 py-1 text-xs font-semibold text-white rounded flex items-center gap-1
+        ${modelSearchLoading ? "bg-gray-400" : "bg-blue-500 hover:bg-blue-600"}
+      `}
+    >
+      {modelSearchLoading ? (
+        <CircularProgress size={12} color="inherit" />
+      ) : (
+        <Search size={12} />
+      )}
+    </button>
+  </div>
+
             <CategorySelectField
               label="Category"
               name="Category"
@@ -2387,6 +2852,7 @@ export default function CreateTicket() {
                 value={values.ORDER_TYPE_CODE}
                 onChange={handleChange}
               />
+              
               {(isL2 || isL3) && (
                 <div className="col-span-2 flex items-center gap-2 px-1 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                   <input
@@ -2441,7 +2907,7 @@ export default function CreateTicket() {
                     label="Service Type"
                     name="SERVICE_TYPE"
                     type="select"
-                    options={serviceTypes.map((item) => item.service_type_name)}
+                  options={filteredServiceTypes.map((item) => item.service_type_name)}
                     required
                     disabled={serviceTypesLoading || isTicketReadOnly}
                     value={values.SERVICE_TYPE}
@@ -2457,6 +2923,88 @@ export default function CreateTicket() {
                   />
                 </>
               )}
+              {values.ORDER_TYPE_CODE === "ZWO3" && (
+  <div className="space-y-2">
+    
+    <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide block">
+      Service Request <span className="text-red-500">*</span>
+    </label>
+
+    {/* RADIO */}
+    <div className="flex gap-3">
+      <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+        <input
+          type="radio"
+          className="accent-blue-600"
+          value="EXISTING"
+          checked={srMode === "EXISTING"}
+          onChange={() => setSrMode("EXISTING")}
+        />
+        Existing
+      </label>
+
+      <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+        <input
+          type="radio"
+          className="accent-blue-600"
+          value="NEW"
+          checked={srMode === "NEW"}
+          onChange={() => setSrMode("NEW")}
+        />
+        New
+      </label>
+    </div>
+
+    {/* EXISTING SR DROPDOWN */}
+    {srMode === "EXISTING" && (
+      <div>
+        <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide block mb-1">
+          Select Service Request
+        </label>
+
+        <select
+          className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs 
+                     focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none transition-all"
+          value={selectedSrExternal}
+          onChange={(e) => setSelectedSrExternal(e.target.value)}
+        >
+          <option value="">Select SR</option>
+          {existingSrList.map((sr) => (
+            <option
+              key={sr.external_ticket_number}
+              value={sr.external_ticket_number}
+            >
+              {sr.external_ticket_number}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
+
+    {/* NEW SR → SERVICE TYPE (reuse FormField) */}
+    {srMode === "NEW" && (
+      <FormField
+        label="Service Type"
+        name="SERVICE_TYPE"
+        type="select"
+        options={serviceTypes.map((s) => ({
+          label: s.service_type_name,
+          value: s.service_type_name,
+        }))}
+        value={values.SERVICE_TYPE}
+        onChange={handleChange}
+        required
+        disabled={srMode !== "NEW"}
+      />
+    )}
+    {srMode === "EXISTING" && existingSrList.length === 0 && (
+  <p className="text-[10px] text-red-500">
+    No Service Request found for this customer {existingSrList.length}
+  </p>
+) }
+  </div>
+)}
+
             </div>
             {shouldShowSymptomSection() && (
               <>
@@ -2569,14 +3117,26 @@ export default function CreateTicket() {
         </div>
         <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-lg space-y-2">
           {/* Problem Note: readonly when ticket selected */}
-          <FormField
-            label="Problem Note"
-            name="problem_note"
-            type="textarea"
-            value={values.problem_note}
-            onChange={handleChange}
-            readOnly={isTicketReadOnly}
-          />
+         <FormField
+    label="Problem Description"
+    name="problem_note"
+    type="textarea"
+    value={values.problem_note}
+    onChange={(e) => {
+      if (e.target.value.length <= 40) handleChange(e);
+    }}
+    readOnly={isTicketReadOnly}
+  />
+  <div className="flex justify-between items-center mt-0.5">
+    {values.problem_note?.length >= 40 && (
+      <span className="text-red-500 text-[10px] font-medium">
+        Maximum 40 characters allowed
+      </span>
+    )}
+    <span className={`ml-auto text-[10px] ${values.problem_note?.length >= 40 ? "text-red-500 font-semibold" : "text-gray-400"}`}>
+      {values.problem_note?.length || 0}/40
+    </span>
+  </div>
 
           {/* Agent Remarks: always editable */}
           <FormField
@@ -2613,16 +3173,19 @@ export default function CreateTicket() {
                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Type</th>
                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Ticket ID</th>
                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">HCRM ID</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Status</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Stage</th>
                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created By</th>
                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created At</th>
+                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Status</th>
+                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Stage</th>
                   <th className="px-2 py-1 text-center font-medium text-[10px] text-gray-400 uppercase tracking-wide"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {ticketHistory.map((ticket) => {
-                  const isOpen = ticket.status?.toLowerCase() === "assigned";
+                  // const isOpen = ticket.status?.toLowerCase() === "assigned";
+                    const isOpen =
+  allowedStatuses.includes(ticket.status?.trim().toLowerCase()) &&
+  ticket.order_type_name === "Service Request";
                   const isSelected = Number(selectedTicketId) === Number(ticket.id);
 
                   return (
@@ -2649,7 +3212,15 @@ export default function CreateTicket() {
                         {/* HCRM ID */}
                         <td className="px-2 py-0.5 text-gray-500 text-[11px]">{ticket.external_ticket_number || "—"}</td>
 
-                        {/* Status */}
+                     
+
+                        {/* Created By */}
+                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{ticket.order_source_name}</td>
+
+                        {/* Created At */}
+                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{convertUTCToIST(ticket.createdAt)}</td>
+
+                       {/* Status */}
                         <td className="px-3 py-1">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold leading-none ${
@@ -2668,12 +3239,6 @@ export default function CreateTicket() {
                         <td className="px-2 py-0.5 text-gray-500 text-[11px] max-w-[140px] truncate" title={ticket.stage_label}>
                           {ticket.stage_label || "—"}
                         </td>
-
-                        {/* Created By */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{ticket.order_source_name}</td>
-
-                        {/* Created At */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{convertUTCToIST(ticket.createdAt)}</td>
 
                         {/* View */}
                         <td className="px-2 py-0.5 text-center">
@@ -2709,6 +3274,8 @@ export default function CreateTicket() {
                                       <th className="py-1 pr-2 text-left font-semibold text-gray-500 whitespace-nowrap">Remark</th>
                                       <th className="py-1 pr-2 text-left font-semibold text-gray-500">Created By</th>
                                       <th className="py-1 text-left font-semibold text-gray-500">Date & Time</th>
+                                      <th className="py-1 text-left font-semibold text-gray-500">Status</th>
+                                      <th className="py-1 text-left font-semibold text-gray-500">Stage</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
@@ -2721,6 +3288,8 @@ export default function CreateTicket() {
                                         <td className="py-1 pr-2 text-gray-500 whitespace-nowrap font-mono">
                                           {entry.changed_at ? convertUTCToIST(entry.changed_at) : "—"}
                                         </td>
+                                         <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.status_description || "—"}</td>
+                                        <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.stage_label || "—"}</td>
                                       </tr>
                                     ))}
                                   </tbody>
