@@ -28,7 +28,8 @@ node_modules/
 
 # production
 /build
-
+/uploads
+uploads/*
 .env
 .env.development
 .env.test.local

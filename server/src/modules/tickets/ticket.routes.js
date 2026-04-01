@@ -6,6 +6,7 @@ const authMiddleware = require('../../middleware/auth');
 const upload = require('../../config/multer');
 
 router.get('/:ticketId/application-validation', controller.getApplicationValidationDetails);
+router.get("/service-requests", controller.getServiceRequestsByPhone);
 
 router.patch(
   '/:ticketId/agent-remark',
@@ -44,5 +45,6 @@ router.get('/sla/l3', controller.getL3Tickets);
 router.get('/:ticketId/history', controller.getTicketHistory);
 // GET Ticket Report
 router.get('/report', controller.getTicketReportByDate);
+router.get('/customer-model/search/:model', controller.searchCustomerModel);
 
 module.exports = router;

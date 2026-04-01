@@ -24,6 +24,12 @@ const symptomLevel2Routes = require("../modules/symptomLevel2/symptomLevel2.rout
 const sectionRoutes = require("../modules/section/section.routes");
 const defectRoutes = require("../modules/defect/defect.routes");
 const repairActionRoutes = require("../modules/repairAction/repairAction.routes");
+const category= require("../modules/product_master/category/category_product_master.routes");
+const subcategory = require("../modules/product_master/subcategory/subcategory.routes");
+const modelSpec = require("../modules/product_master/modelSpec/modelSpec.routes");
+const customerModel = require("../modules/product_master/customerModel/customerModel.route");
+const product = require("../modules/product_master/product/product.route");
+
 // Middlewares
 const authMiddleware = require('../middleware/auth');
 
@@ -53,5 +59,10 @@ router.use("/symptom-level2", symptomLevel2Routes);
 router.use("/section", sectionRoutes);
 router.use("/defect", defectRoutes);
 router.use("/repair-action", repairActionRoutes);
+router.use("/product-master", category);
+router.use("/pro-mst/sub", subcategory);
+router.use("/modspec", modelSpec);
+router.use("/customer-models", customerModel);
+router.use("/products", product);
 module.exports = router;
 

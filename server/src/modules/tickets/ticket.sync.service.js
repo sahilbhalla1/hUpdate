@@ -206,7 +206,7 @@ exports.syncServiceOrdersFromSAP = async (payload) => {
 
                 const remarkChanged =
                     normalizeRemark(currentTicket.agent_remarks) !==
-                    normalizeRemark(order.PROBLEM_NOTE);
+                    normalizeRemark(order.REPAIR_NOTE);
 
                 const productChanged =
                     productId && currentTicket.product_id !== productId;
@@ -261,9 +261,9 @@ exports.syncServiceOrdersFromSAP = async (payload) => {
 
     console.log("remarkChanged:", remarkChanged, {
         old_raw: currentTicket.agent_remarks,
-        new_raw: order.PROBLEM_NOTE,
+        new_raw: order.REPAIR_NOTE,
         old_normalized: normalizeRemark(currentTicket.agent_remarks),
-        new_normalized: normalizeRemark(order.PROBLEM_NOTE)
+        new_normalized: normalizeRemark(order.REPAIR_NOTE)
     });
 
     console.log("assignDateChanged:", assignDateChanged, {
@@ -284,7 +284,7 @@ exports.syncServiceOrdersFromSAP = async (payload) => {
                         [
                             statusRow.id,
                             stageId,
-                            order.PROBLEM_NOTE || null,
+                            order.REPAIR_NOTE || null,
                             newAssignDate,
                             ticketId
                         ]
@@ -298,7 +298,7 @@ exports.syncServiceOrdersFromSAP = async (payload) => {
                             ticketId,
                             statusRow.id,
                             stageId,
-                            order.PROBLEM_NOTE || null,
+                            order.REPAIR_NOTE || null,
                             3
                         ]
                     );

@@ -455,24 +455,701 @@ async function resolveStatusCodeById(connection, statusId) {
   return rows[0].status_code;
 }
 
+// exports.createTicket = async (frontendPayload, userId, userName) => {
+//   const connection = await db.getConnection();
+
+//   let ticketId, ticketNumber, consultingTicketId, consultingTicketNumber,
+//     autoStatusId, consultingTypeCode, payload;
+
+//   try {
+//     await connection.beginTransaction();
+
+//     // STEP 1 — Map frontend → backend structure
+//     payload = mapFrontendToDb(frontendPayload);
+
+//     const customerId = await resolveCustomer(connection, payload);
+//     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
+//     const orderTypeId = await resolveOrderType(connection, payload.orderTypeCode);
+//     const consultingTypeId = await resolveConsultingType(connection, payload.orderTypeCode, payload.consultingTypeCode,payload.consultingType);
+//     const complaintTypeId = await resolveComplaintType(connection, payload.orderTypeCode, payload.complaintTypeCode);
+
+//     if (payload.stageId !== undefined && payload.stageId !== null && payload.stageId !== "") {
+//       const [validStage] = await connection.execute(
+//         `SELECT 1 FROM stage_master WHERE id = ? LIMIT 1`,
+//         [payload.stageId]
+//       );
+//       if (!validStage.length) throw new Error('Invalid stage for status');
+//     }
+
+//     // 🔒 DUPLICATE CHECK (FIXED)
+// if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
+
+//   const CLOSED_STATUS_MAP = {
+//     ZSV1: ['E0006', 'E0014'],
+//     ZWO3: ['E0003']
+//   };
+
+//   const closedStatuses = CLOSED_STATUS_MAP[payload.orderTypeCode];
+
+//   const duplicateQuery = `
+//     SELECT t.id
+//     FROM tickets t
+//     JOIN status_master sm 
+//       ON sm.id = t.current_status_id 
+//       AND sm.order_type = ?
+//     WHERE t.customer_id = ?
+//       AND t.customer_product_id = ?
+//       AND t.order_type_id = ?
+//       AND sm.status_code NOT IN (${closedStatuses.map(() => '?').join(',')})
+//     LIMIT 1
+//   `;
+
+//   const params = [
+//     payload.orderTypeCode,   // for sm.order_type
+//     customerId,
+//     customerProductId,
+//     orderTypeId,             // 🔥 use ID directly
+//     ...closedStatuses
+//   ];
+
+//   const [existingTicket] = await connection.execute(duplicateQuery, params);
+
+//   if (existingTicket.length > 0) {
+//     if (payload.orderTypeCode === 'ZSV1') {
+//       throw new Error('Open Service Request already exists for this customer and product');
+//     }
+//     if (payload.orderTypeCode === 'ZWO3') {
+//       throw new Error('Open Complaint already exists for this customer and product');
+//     }
+//   }
+// }
+
+//     // ticketNumber = generateTicketNumber();
+//     consultingTicketId = null;
+//     consultingTicketNumber = null;
+//     autoStatusId = null;
+//     consultingTypeCode = null;
+
+//     // Insert main ticket
+//     const [result] = await connection.execute(
+//       `INSERT INTO tickets (
+//          customer_id, customer_product_id, order_type_id,
+//         order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
+//         section_id, defect_id, repair_action_id, condition_flag,
+//         problem_note, agent_remarks, assign_date, consulting_type_id,
+//         complaint_type_id, current_status_id, current_stage_id, created_by
+//       ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         customerId, customerProductId, orderTypeId,
+//         payload.orderSourceId,
+//         normalizeInt(payload.serviceTypeId) ?? null,
+//         normalizeInt(payload.symptom1Id) ?? null,
+//         normalizeInt(payload.symptom2Id) ?? null,
+//         normalizeInt(payload.sectionId) ?? null,
+//         normalizeInt(payload.defectId) ?? null,
+//         normalizeInt(payload.repairActionId) ?? null,
+//         normalizeInt(payload.conditionFlag) ?? null,
+//         payload.problemNote ?? null,
+//         payload.agentRemarks ?? null,
+//         payload.assignDate ?? null,
+//         consultingTypeId, complaintTypeId,
+//         payload.statusId,
+//         normalizeInt(payload.stageId) ?? null,
+//         userId
+//       ]
+//     );
+//     ticketId = result.insertId;
+
+//     ticketNumber = generateTicketNumber(
+//       ticketId,
+//       payload.orderTypeCode
+//     );
+//     await connection.execute(
+//       `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+//       [ticketNumber, ticketId]
+//     );
+
+//     await connection.execute(
+//       `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+//        VALUES (?, ?, ?, ?, ?)`,
+//       [ticketId, payload.statusId, normalizeInt(payload.stageId) ?? null, payload.agentRemarks ?? null, userId]
+//     );
+
+//     // Auto-create consulting ticket for ZSV1 / ZWO3
+//     if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
+//       const [consultingOrderTypeRow] = await connection.execute(
+//         `SELECT id FROM order_type_master WHERE order_type = 'ZWO4' LIMIT 1`
+//       );
+//       if (!consultingOrderTypeRow.length) throw new Error('Consulting order type not found');
+
+//       const consultingOrderTypeId = consultingOrderTypeRow[0].id;
+//       consultingTypeCode = payload.orderTypeCode === 'ZSV1' ? 'W01' : 'W01';
+//       const resolvedConsultingTypeId = await resolveConsultingTypeByCode(connection, consultingTypeCode,"General Inquiry");
+//       // const resolvedConsultingTypeId = 1;
+//       autoStatusId = await resolveStatusByCode(connection, 'E0003', 'ZWO4');
+//       // consultingTicketNumber = generateTicketNumber();
+
+//       const [consultingResult] = await connection.execute(
+//         `INSERT INTO tickets (
+//           customer_id, customer_product_id, order_type_id,
+//           order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
+//           section_id, defect_id, repair_action_id, condition_flag,
+//           problem_note, agent_remarks, consulting_type_id, complaint_type_id,
+//           current_status_id, current_stage_id, created_by
+//         ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//         [
+//           customerId, customerProductId, consultingOrderTypeId,
+//           payload.orderSourceId, null,
+//           payload.symptom1Id ?? null, payload.symptom2Id ?? null,
+//           payload.sectionId ?? null, payload.defectId ?? null,
+//           payload.repairActionId ?? null, payload.conditionFlag ?? null,
+//           payload.problemNote ?? null, payload.agentRemarks ?? null,
+//           resolvedConsultingTypeId, null,
+//           autoStatusId, null, userId
+//         ]
+//       );
+//       consultingTicketId = consultingResult.insertId;
+//       consultingTicketNumber = generateTicketNumber(
+//         consultingTicketId,
+//         "ZWO4"
+//       );
+
+//       await connection.execute(
+//         `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+//         [consultingTicketNumber, consultingTicketId]
+//       );
+
+//       await connection.execute(
+//         `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+//          VALUES (?, ?, ?, ?, ?)`,
+//         [consultingTicketId, autoStatusId, null, payload.agentRemarks ?? null, userId]
+//       );
+//     }
+
+//     // ✅ SOAP calls — block here before commit
+//     const ticketsToSync = [
+//       {
+//         id: ticketId,
+//         ticketNumber,
+//         orderTypeCode: payload.orderTypeCode,
+//         statusId: payload.statusId,
+//         HEAD_FIELD1: payload.orderTypeCode === 'ZWO3' ? payload.complaintTypeCode : '',
+//         CREATE_USER: userName
+//       }
+//     ];
+
+//     if (consultingTicketId) {
+//       ticketsToSync.push({
+//         id: consultingTicketId,
+//         ticketNumber: consultingTicketNumber,
+//         orderTypeCode: 'ZWO4',
+//         HEAD_FIELD1: consultingTypeCode,
+//         statusId: autoStatusId,
+//         CREATE_USER: userName
+//       });
+//     }
+
+//     // const sapSyncResults = [];
+
+//     for (const t of ticketsToSync) {
+//       const statusCode = await resolveStatusCodeById(connection, t.statusId);
+
+//       const isOnlyConsulting =
+//         t.orderTypeCode === 'ZWO4' &&
+//         !(consultingTicketId && t.id === consultingTicketId);
+
+//       const soapPayload = mapDbToSoap({
+//         ...frontendPayload,
+//         SP_ORDER: t.ticketNumber,
+//         ORDER_TYPE_CODE: t.orderTypeCode,
+//         STATUS_CODE: statusCode,
+//         HEAD_FIELD1: isOnlyConsulting ? payload.consultingTypeCode : t.HEAD_FIELD1,
+//         HEAD_FIELD3: isOnlyConsulting ? 'X' : '',
+//         CREATE_USER: userName
+//       });
+
+//       let soapStatus = 'FAILED';
+//       let soapError = null;
+//       let soapResponse = null;
+//       let externalTicketNumber = null;
+
+//       try {
+//         soapResponse = await createHisenseOrder({
+//           payload: soapPayload,
+//           ticketId: t.id,
+//           ticketNumber: t.ticketNumber,
+//           orderTypeCode: t.orderTypeCode
+//         });
+
+//         if (soapResponse.success && soapResponse.objectId) {
+//           externalTicketNumber = soapResponse.objectId;
+//           soapStatus = 'SUCCESS';
+
+//           await connection.execute(
+//             `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+//             [externalTicketNumber, t.id]
+//           );
+//         } else {
+//           // SAP returned but without success — still "FAILED"
+//           soapError = soapResponse?.message || 'SAP returned without objectId';
+//         }
+//       } catch (soapErr) {
+//         soapError = soapErr.message;
+//       }
+
+//       // // Log every attempt to sap_sync_log (within same transaction)
+//       // await connection.execute(
+//       //   `INSERT INTO sap_sync_log 
+//       //     (ticket_id, ticket_number, order_type_code, request_payload, response_payload,
+//       //      external_ticket_number, status, error_message)
+//       //    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+//       //   [
+//       //     t.id,
+//       //     t.ticketNumber,
+//       //     t.orderTypeCode,
+//       //     JSON.stringify(soapPayload),
+//       //     JSON.stringify(soapResponse),
+//       //     externalTicketNumber,
+//       //     soapStatus,
+//       //     soapError
+//       //   ]
+//       // );
+
+//       // sapSyncResults.push({ ticketId: t.id, ticketNumber: t.ticketNumber, soapStatus, soapError });
+//     }
+
+//     // Everything succeeded — commit DB + SOAP results together
+//     await connection.commit();
+
+//     return {
+//       success: true,
+//       ticketId,
+//       ticketNumber,
+//       // sapSync: sapSyncResults   // frontend can inspect per-ticket SAP outcome
+//     };
+
+//   } catch (error) {
+//     await connection.rollback();
+//     throw error;
+//   } finally {
+//     connection.release();
+//   }
+// };
+
+const resolveStageByCode = async (connection, stageCode, orderType) => {
+  const [rows] = await connection.execute(
+    `
+    SELECT id 
+    FROM stage_master 
+    WHERE stage_code = ? 
+    LIMIT 1
+    `,
+    [stageCode]
+  );
+
+  if (!rows.length) {
+    throw new Error(`Stage not found for code ${stageCode} and order type ${orderType}`);
+  }
+
+  return rows[0].id;
+};
+
+// exports.createTicket = async (frontendPayload, userId, userName) => {
+//   const connection = await db.getConnection();
+
+//   let ticketId, ticketNumber, consultingTicketId, consultingTicketNumber,
+//     autoStatusId, consultingTypeCode, payload;
+
+//   let srExternalNumber = null;
+//   let srTicketId = null;
+//   let srTicketNumber = null;
+
+//   try {
+//     await connection.beginTransaction();
+
+//     payload = mapFrontendToDb(frontendPayload);
+
+//     const customerId = await resolveCustomer(connection, payload);
+//     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
+//     const orderTypeId = await resolveOrderType(connection, payload.orderTypeCode);
+//     const consultingTypeId = await resolveConsultingType(connection, payload.orderTypeCode, payload.consultingTypeCode, payload.consultingType);
+//     const complaintTypeId = await resolveComplaintType(connection, payload.orderTypeCode, payload.complaintTypeCode);
+
+//     // ✅ Stage validation
+//     if (payload.stageId !== undefined && payload.stageId !== null && payload.stageId !== "") {
+//       const [validStage] = await connection.execute(
+//         `SELECT 1 FROM stage_master WHERE id = ? LIMIT 1`,
+//         [payload.stageId]
+//       );
+//       if (!validStage.length) throw new Error('Invalid stage for status');
+//     }
+
+//     consultingTicketId = null;
+//     consultingTicketNumber = null;
+//     autoStatusId = null;
+//     consultingTypeCode = null;
+
+//     const isComplaint = payload.orderTypeCode === 'ZWO3';
+//     const hasExistingSR = !!payload.externalServiceRequestNumber;
+
+//     // =========================
+//     // 🔥 SR HANDLING
+//     // =========================
+//     if (isComplaint && hasExistingSR) {
+//       srExternalNumber = payload.externalServiceRequestNumber;
+//     }
+
+//     if (isComplaint && !hasExistingSR) {
+
+//       const [srOrderTypeRow] = await connection.execute(
+//         `SELECT id FROM order_type_master WHERE order_type = 'ZSV1' LIMIT 1`
+//       );
+//       if (!srOrderTypeRow.length) throw new Error('SR order type not found');
+
+//       const srOrderTypeId = srOrderTypeRow[0].id;
+
+//       const srStatusId = await resolveStatusByCode(connection, 'E0002', 'ZSV1');
+//       const srStageId = await resolveStageByCode(connection, 'E0002', 'ZSV1');
+
+//       const [srResult] = await connection.execute(
+//         `INSERT INTO tickets (
+//           customer_id, customer_product_id, order_type_id,
+//           order_source_id, service_type_id,
+//           symptom_l1_id, symptom_l2_id,
+//           section_id, defect_id, repair_action_id,
+//           condition_flag, problem_note, agent_remarks,
+//           current_status_id, current_stage_id, created_by
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//         [
+//           customerId, customerProductId, srOrderTypeId,
+//           payload.orderSourceId,
+//           normalizeInt(payload.serviceTypeId) ?? null,
+//           normalizeInt(payload.symptom1Id) ?? null,
+//           normalizeInt(payload.symptom2Id) ?? null,
+//           normalizeInt(payload.sectionId) ?? null,
+//           normalizeInt(payload.defectId) ?? null,
+//           normalizeInt(payload.repairActionId) ?? null,
+//           normalizeInt(payload.conditionFlag) ?? null,
+//           payload.problemNote ?? null,
+//           payload.agentRemarks ?? null,
+//           srStatusId,
+//           srStageId,
+//           userId
+//         ]
+//       );
+
+//       srTicketId = srResult.insertId;
+
+//       srTicketNumber = generateTicketNumber(srTicketId, 'ZSV1');
+
+//       await connection.execute(
+//         `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+//         [srTicketNumber, srTicketId]
+//       );
+
+//       // ✅ SR HISTORY (FIXED)
+//       await connection.execute(
+//         `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+//          VALUES (?, ?, ?, ?, ?)`,
+//         [srTicketId, srStatusId, srStageId, payload.agentRemarks ?? null, userId]
+//       );
+
+//       // 🔥 SR SOAP
+//       const srSoapResponse = await createHisenseOrder({
+//         payload: mapDbToSoap({
+//           ...frontendPayload,
+//           SP_ORDER: srTicketNumber,
+//           ORDER_TYPE_CODE: 'ZSV1',
+//           CREATE_USER: userName
+//         }),
+//         ticketId: srTicketId,
+//         ticketNumber: srTicketNumber,
+//         orderTypeCode: 'ZSV1'
+//       });
+
+//       if (!srSoapResponse.success || !srSoapResponse.objectId) {
+//         throw new Error('SR creation failed, cannot proceed with complaint');
+//       }
+
+//       srExternalNumber = srSoapResponse.objectId;
+
+//       await connection.execute(
+//         `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+//         [srExternalNumber, srTicketId]
+//       );
+//     }
+
+//     // =========================
+//     // DUPLICATE CHECK
+//     // =========================
+//     if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
+
+//       const CLOSED_STATUS_MAP = {
+//         ZSV1: ['E0006', 'E0014'],
+//         ZWO3: ['E0003']
+//       };
+
+//       const closedStatuses = CLOSED_STATUS_MAP[payload.orderTypeCode];
+
+//       const duplicateQuery = `
+//         SELECT t.id
+//         FROM tickets t
+//         JOIN status_master sm 
+//           ON sm.id = t.current_status_id 
+//           AND sm.order_type = ?
+//         WHERE t.customer_id = ?
+//           AND t.customer_product_id = ?
+//           AND t.order_type_id = ?
+//           AND sm.status_code NOT IN (${closedStatuses.map(() => '?').join(',')})
+//         LIMIT 1
+//       `;
+
+//       const params = [
+//         payload.orderTypeCode,
+//         customerId,
+//         customerProductId,
+//         orderTypeId,
+//         ...closedStatuses
+//       ];
+
+//       const [existingTicket] = await connection.execute(duplicateQuery, params);
+
+//       if (existingTicket.length > 0) {
+//         if (payload.orderTypeCode === 'ZSV1') {
+//           throw new Error('Open Service Request already exists for this customer and product');
+//         }
+//         if (payload.orderTypeCode === 'ZWO3') {
+//           throw new Error('Open Complaint already exists for this customer and product');
+//         }
+//       }
+//     }
+
+//     // =========================
+//     // MAIN TICKET
+//     // =========================
+//     const [result] = await connection.execute(
+//       `INSERT INTO tickets (
+//          customer_id, customer_product_id, order_type_id,
+//         order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
+//         section_id, defect_id, repair_action_id, condition_flag,
+//         problem_note, agent_remarks, assign_date, consulting_type_id,
+//         complaint_type_id, current_status_id, current_stage_id, created_by
+//       ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         customerId, customerProductId, orderTypeId,
+//         payload.orderSourceId,
+//         normalizeInt(payload.serviceTypeId) ?? null,
+//         normalizeInt(payload.symptom1Id) ?? null,
+//         normalizeInt(payload.symptom2Id) ?? null,
+//         normalizeInt(payload.sectionId) ?? null,
+//         normalizeInt(payload.defectId) ?? null,
+//         normalizeInt(payload.repairActionId) ?? null,
+//         normalizeInt(payload.conditionFlag) ?? null,
+//         payload.problemNote ?? null,
+//         payload.agentRemarks ?? null,
+//         payload.assignDate ?? null,
+//         consultingTypeId, complaintTypeId,
+//         payload.statusId,
+//         normalizeInt(payload.stageId) ?? null,
+//         userId
+//       ]
+//     );
+
+//     ticketId = result.insertId;
+
+//     ticketNumber = generateTicketNumber(ticketId, payload.orderTypeCode);
+
+//     await connection.execute(
+//       `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+//       [ticketNumber, ticketId]
+//     );
+
+//     await connection.execute(
+//       `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+//        VALUES (?, ?, ?, ?, ?)`,
+//       [ticketId, payload.statusId, normalizeInt(payload.stageId) ?? null, payload.agentRemarks ?? null, userId]
+//     );
+
+//     if (isComplaint && srTicketId) {
+//       await connection.execute(
+//         `INSERT INTO ticket_relations (parent_ticket_id, child_ticket_id, relation_type)
+//          VALUES (?, ?, 'ESCALATION')`,
+//         [srTicketId, ticketId]
+//       );
+//     }
+
+//     // =========================
+//     // CONSULTING (UNCHANGED)
+//     // =========================
+//     if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
+//       const [consultingOrderTypeRow] = await connection.execute(
+//         `SELECT id FROM order_type_master WHERE order_type = 'ZWO4' LIMIT 1`
+//       );
+//       if (!consultingOrderTypeRow.length) throw new Error('Consulting order type not found');
+
+//       const consultingOrderTypeId = consultingOrderTypeRow[0].id;
+
+//       consultingTypeCode = 'W01';
+//       const resolvedConsultingTypeId = await resolveConsultingTypeByCode(connection, consultingTypeCode, "General Inquiry");
+
+//       autoStatusId = await resolveStatusByCode(connection, 'E0003', 'ZWO4');
+
+//       const [consultingResult] = await connection.execute(
+//         `INSERT INTO tickets (
+//           customer_id, customer_product_id, order_type_id,
+//           order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
+//           section_id, defect_id, repair_action_id, condition_flag,
+//           problem_note, agent_remarks, consulting_type_id,
+//           current_status_id, current_stage_id, created_by
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//         [
+//           customerId, customerProductId, consultingOrderTypeId,
+//           payload.orderSourceId, null,
+//           payload.symptom1Id ?? null,
+//           payload.symptom2Id ?? null,
+//           payload.sectionId ?? null,
+//           payload.defectId ?? null,
+//           payload.repairActionId ?? null,
+//           payload.conditionFlag ?? null,
+//           payload.problemNote ?? null,
+//           payload.agentRemarks ?? null,
+//           resolvedConsultingTypeId,
+//           autoStatusId,
+//           null,
+//           userId
+//         ]
+//       );
+
+//       consultingTicketId = consultingResult.insertId;
+
+//       consultingTicketNumber = generateTicketNumber(consultingTicketId, "ZWO4");
+
+//       await connection.execute(
+//         `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+//         [consultingTicketNumber, consultingTicketId]
+//       );
+
+//       await connection.execute(
+//         `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+//          VALUES (?, ?, ?, ?, ?)`,
+//         [consultingTicketId, autoStatusId, null, payload.agentRemarks ?? null, userId]
+//       );
+//     }
+
+//     // =========================
+//     // SOAP LOOP
+//     // =========================
+//     const ticketsToSync = [
+//       {
+//         id: ticketId,
+//         ticketNumber,
+//         orderTypeCode: payload.orderTypeCode,
+//         statusId: payload.statusId,
+//         HEAD_FIELD1: payload.orderTypeCode === 'ZWO3' ? payload.complaintTypeCode : '',
+//         CREATE_USER: userName
+//       }
+//     ];
+
+//     if (consultingTicketId) {
+//       ticketsToSync.push({
+//         id: consultingTicketId,
+//         ticketNumber: consultingTicketNumber,
+//         orderTypeCode: 'ZWO4',
+//         HEAD_FIELD1: consultingTypeCode,
+//         statusId: autoStatusId,
+//         CREATE_USER: userName
+//       });
+//     }
+
+//     for (const t of ticketsToSync) {
+
+//       const statusCode = await resolveStatusCodeById(connection, t.statusId);
+
+//       const isOnlyConsulting =
+//         t.orderTypeCode === 'ZWO4' &&
+//         !(consultingTicketId && t.id === consultingTicketId);
+
+//       const soapPayload = mapDbToSoap({
+//         ...frontendPayload,
+//         SP_ORDER:
+//           (t.orderTypeCode === 'ZWO3' && srExternalNumber)
+//             ? srExternalNumber
+//             : t.ticketNumber,
+//         ORDER_TYPE_CODE: t.orderTypeCode,
+//         STATUS_CODE: statusCode,
+//         HEAD_FIELD1: isOnlyConsulting ? payload.consultingTypeCode : t.HEAD_FIELD1,
+//         HEAD_FIELD3: isOnlyConsulting ? 'X' : '',
+//         CREATE_USER: userName
+//       });
+
+//       let soapStatus = 'FAILED';
+//       let soapError = null;
+//       let soapResponse = null;
+//       let externalTicketNumber = null;
+
+//       try {
+//         soapResponse = await createHisenseOrder({
+//           payload: soapPayload,
+//           ticketId: t.id,
+//           ticketNumber: t.ticketNumber,
+//           orderTypeCode: t.orderTypeCode
+//         });
+
+//         if (soapResponse.success && soapResponse.objectId) {
+//           externalTicketNumber = soapResponse.objectId;
+//           soapStatus = 'SUCCESS';
+
+//           await connection.execute(
+//             `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+//             [externalTicketNumber, t.id]
+//           );
+//         } else {
+//           // SAP returned but without success — still "FAILED"
+//           soapError = soapResponse?.message || 'SAP returned without objectId';
+//         }
+//       } catch (soapErr) {
+//         soapError = soapErr.message;
+//       }
+//     }
+
+//     await connection.commit();
+
+//     return {
+//       success: true,
+//       ticketId,
+//       ticketNumber
+//     };
+
+//   } catch (error) {
+//     await connection.rollback();
+//     throw error;
+//   } finally {
+//     connection.release();
+//   }
+// };
+
 exports.createTicket = async (frontendPayload, userId, userName) => {
   const connection = await db.getConnection();
 
   let ticketId, ticketNumber, consultingTicketId, consultingTicketNumber,
     autoStatusId, consultingTypeCode, payload;
 
+  let srExternalNumber = null;
+  let srTicketId = null;
+  let srTicketNumber = null;
+
   try {
     await connection.beginTransaction();
 
-    // STEP 1 — Map frontend → backend structure
     payload = mapFrontendToDb(frontendPayload);
 
     const customerId = await resolveCustomer(connection, payload);
     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
     const orderTypeId = await resolveOrderType(connection, payload.orderTypeCode);
-    const consultingTypeId = await resolveConsultingType(connection, payload.orderTypeCode, payload.consultingTypeCode,payload.consultingType);
+    const consultingTypeId = await resolveConsultingType(connection, payload.orderTypeCode, payload.consultingTypeCode, payload.consultingType);
     const complaintTypeId = await resolveComplaintType(connection, payload.orderTypeCode, payload.complaintTypeCode);
 
+    // ✅ Stage validation
     if (payload.stageId !== undefined && payload.stageId !== null && payload.stageId !== "") {
       const [validStage] = await connection.execute(
         `SELECT 1 FROM stage_master WHERE id = ? LIMIT 1`,
@@ -481,21 +1158,162 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       if (!validStage.length) throw new Error('Invalid stage for status');
     }
 
-    // ticketNumber = generateTicketNumber();
     consultingTicketId = null;
     consultingTicketNumber = null;
     autoStatusId = null;
     consultingTypeCode = null;
 
-    // Insert main ticket
+    const isComplaint = payload.orderTypeCode === 'ZWO3';
+    const hasExistingSR = !!payload.externalServiceRequestNumber;
+
+    // =========================
+    // 🔥 SR HANDLING
+    // =========================
+    if (isComplaint && hasExistingSR) {
+      srExternalNumber = payload.externalServiceRequestNumber;
+    }
+
+    if (isComplaint && !hasExistingSR) {
+
+      const [srOrderTypeRow] = await connection.execute(
+        `SELECT id FROM order_type_master WHERE order_type = 'ZSV1' LIMIT 1`
+      );
+      if (!srOrderTypeRow.length) throw new Error('SR order type not found');
+
+      const srOrderTypeId = srOrderTypeRow[0].id;
+
+      const srStatusId = await resolveStatusByCode(connection, 'E0002', 'ZSV1');
+      const srStageId = await resolveStageByCode(connection, 'E0002', 'ZSV1');
+
+      const [srResult] = await connection.execute(
+        `INSERT INTO tickets (
+          customer_id, customer_product_id, order_type_id,
+          order_source_id, service_type_id,
+          symptom_l1_id, symptom_l2_id,
+          section_id, defect_id, repair_action_id,
+          condition_flag, problem_note, agent_remarks,
+          current_status_id, current_stage_id, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          customerId, customerProductId, srOrderTypeId,
+          payload.orderSourceId,
+          normalizeInt(payload.serviceTypeId) ?? null,
+          normalizeInt(payload.symptom1Id) ?? null,
+          normalizeInt(payload.symptom2Id) ?? null,
+          normalizeInt(payload.sectionId) ?? null,
+          normalizeInt(payload.defectId) ?? null,
+          normalizeInt(payload.repairActionId) ?? null,
+          normalizeInt(payload.conditionFlag) ?? null,
+          payload.problemNote ?? null,
+          payload.agentRemarks ?? null,
+          srStatusId,
+          srStageId,
+          userId
+        ]
+      );
+
+      srTicketId = srResult.insertId;
+
+      srTicketNumber = generateTicketNumber(srTicketId, 'ZSV1');
+
+      await connection.execute(
+        `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+        [srTicketNumber, srTicketId]
+      );
+
+      // ✅ SR HISTORY (FIXED)
+      await connection.execute(
+        `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
+         VALUES (?, ?, ?, ?, ?)`,
+        [srTicketId, srStatusId, srStageId, payload.agentRemarks ?? null, userId]
+      );
+
+      // 🔥 SR SOAP
+      const srSoapResponse = await createHisenseOrder({
+        payload: mapDbToSoap({
+          ...frontendPayload,
+          SP_ORDER: srTicketNumber,
+          ORDER_TYPE_CODE: 'ZSV1',
+          CREATE_USER: userName
+        }),
+        ticketId: srTicketId,
+        ticketNumber: srTicketNumber,
+        orderTypeCode: 'ZSV1'
+      });
+
+      if (!srSoapResponse.success || !srSoapResponse.objectId) {
+        throw new Error('SR creation failed, cannot proceed with complaint');
+      }
+
+      srExternalNumber = srSoapResponse.objectId;
+
+      await connection.execute(
+        `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+        [srExternalNumber, srTicketId]
+      );
+    }
+
+    // =========================
+    // DUPLICATE CHECK
+    // =========================
+    if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
+
+      const CLOSED_STATUS_MAP = {
+        ZSV1: ['E0006', 'E0014'],
+        ZWO3: ['E0003']
+      };
+
+      const closedStatuses = CLOSED_STATUS_MAP[payload.orderTypeCode];
+
+      const duplicateQuery = `
+        SELECT t.id
+        FROM tickets t
+        JOIN status_master sm 
+          ON sm.id = t.current_status_id 
+          AND sm.order_type = ?
+        WHERE t.customer_id = ?
+          AND t.customer_product_id = ?
+          AND t.order_type_id = ?
+          AND sm.status_code NOT IN (${closedStatuses.map(() => '?').join(',')})
+        LIMIT 1
+      `;
+
+      const params = [
+        payload.orderTypeCode,
+        customerId,
+        customerProductId,
+        orderTypeId,
+        ...closedStatuses
+      ];
+
+      const [existingTicket] = await connection.execute(duplicateQuery, params);
+
+      if (existingTicket.length > 0) {
+        if (payload.orderTypeCode === 'ZSV1') {
+          throw new Error('Open Service Request already exists for this customer and product');
+        }
+        if (payload.orderTypeCode === 'ZWO3') {
+          throw new Error('Open Complaint already exists for this customer and product');
+        }
+      }
+    }
+
+    let mainConsultingOrigin = null;
+
+if (payload.orderTypeCode === 'ZWO4') {
+  mainConsultingOrigin = 'SELF';
+}
+    // =========================
+    // MAIN TICKET
+    // =========================
     const [result] = await connection.execute(
       `INSERT INTO tickets (
          customer_id, customer_product_id, order_type_id,
         order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
         section_id, defect_id, repair_action_id, condition_flag,
         problem_note, agent_remarks, assign_date, consulting_type_id,
-        complaint_type_id, current_status_id, current_stage_id, created_by
-      ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        complaint_type_id, current_status_id, current_stage_id, created_by,consulting_origin
+      ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
       [
         customerId, customerProductId, orderTypeId,
         payload.orderSourceId,
@@ -512,15 +1330,15 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
         consultingTypeId, complaintTypeId,
         payload.statusId,
         normalizeInt(payload.stageId) ?? null,
-        userId
+        userId,
+        mainConsultingOrigin
       ]
     );
+
     ticketId = result.insertId;
 
-    ticketNumber = generateTicketNumber(
-      ticketId,
-      payload.orderTypeCode
-    );
+    ticketNumber = generateTicketNumber(ticketId, payload.orderTypeCode);
+
     await connection.execute(
       `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
       [ticketNumber, ticketId]
@@ -532,7 +1350,17 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       [ticketId, payload.statusId, normalizeInt(payload.stageId) ?? null, payload.agentRemarks ?? null, userId]
     );
 
-    // Auto-create consulting ticket for ZSV1 / ZWO3
+    if (isComplaint && srTicketId) {
+      await connection.execute(
+        `INSERT INTO ticket_relations (parent_ticket_id, child_ticket_id, relation_type)
+         VALUES (?, ?, 'ESCALATION')`,
+        [srTicketId, ticketId]
+      );
+    }
+
+    // =========================
+    // CONSULTING (UNCHANGED)
+    // =========================
     if (payload.orderTypeCode === 'ZSV1' || payload.orderTypeCode === 'ZWO3') {
       const [consultingOrderTypeRow] = await connection.execute(
         `SELECT id FROM order_type_master WHERE order_type = 'ZWO4' LIMIT 1`
@@ -540,36 +1368,50 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       if (!consultingOrderTypeRow.length) throw new Error('Consulting order type not found');
 
       const consultingOrderTypeId = consultingOrderTypeRow[0].id;
-      consultingTypeCode = payload.orderTypeCode === 'ZSV1' ? 'W01' : 'W01';
-      const resolvedConsultingTypeId = await resolveConsultingTypeByCode(connection, consultingTypeCode,"General Inquiry");
-      // const resolvedConsultingTypeId = 1;
+
+      consultingTypeCode = 'W01';
+      const resolvedConsultingTypeId = await resolveConsultingTypeByCode(connection, consultingTypeCode, "General Inquiry");
+
       autoStatusId = await resolveStatusByCode(connection, 'E0003', 'ZWO4');
-      // consultingTicketNumber = generateTicketNumber();
+
+      let consultingOrigin = 'SELF';
+
+if (payload.orderTypeCode === 'ZSV1') {
+  consultingOrigin = 'SR';
+} else if (payload.orderTypeCode === 'ZWO3') {
+  consultingOrigin = 'CO';
+}
 
       const [consultingResult] = await connection.execute(
         `INSERT INTO tickets (
           customer_id, customer_product_id, order_type_id,
           order_source_id, service_type_id, symptom_l1_id, symptom_l2_id,
           section_id, defect_id, repair_action_id, condition_flag,
-          problem_note, agent_remarks, consulting_type_id, complaint_type_id,
-          current_status_id, current_stage_id, created_by
-        ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          problem_note, agent_remarks, consulting_type_id,
+          current_status_id, current_stage_id, created_by,consulting_origin
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
         [
           customerId, customerProductId, consultingOrderTypeId,
           payload.orderSourceId, null,
-          payload.symptom1Id ?? null, payload.symptom2Id ?? null,
-          payload.sectionId ?? null, payload.defectId ?? null,
-          payload.repairActionId ?? null, payload.conditionFlag ?? null,
-          payload.problemNote ?? null, payload.agentRemarks ?? null,
-          resolvedConsultingTypeId, null,
-          autoStatusId, null, userId
+          payload.symptom1Id ?? null,
+          payload.symptom2Id ?? null,
+          payload.sectionId ?? null,
+          payload.defectId ?? null,
+          payload.repairActionId ?? null,
+          payload.conditionFlag ?? null,
+          payload.problemNote ?? null,
+          payload.agentRemarks ?? null,
+          resolvedConsultingTypeId,
+          autoStatusId,
+          null,
+          userId,
+          consultingOrigin
         ]
       );
+
       consultingTicketId = consultingResult.insertId;
-      consultingTicketNumber = generateTicketNumber(
-        consultingTicketId,
-        "ZWO4"
-      );
+
+      consultingTicketNumber = generateTicketNumber(consultingTicketId, "ZWO4");
 
       await connection.execute(
         `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
@@ -583,7 +1425,9 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       );
     }
 
-    // ✅ SOAP calls — block here before commit
+    // =========================
+    // SOAP LOOP
+    // =========================
     const ticketsToSync = [
       {
         id: ticketId,
@@ -606,9 +1450,8 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       });
     }
 
-    // const sapSyncResults = [];
-
     for (const t of ticketsToSync) {
+
       const statusCode = await resolveStatusCodeById(connection, t.statusId);
 
       const isOnlyConsulting =
@@ -617,7 +1460,10 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
 
       const soapPayload = mapDbToSoap({
         ...frontendPayload,
-        SP_ORDER: t.ticketNumber,
+        SP_ORDER:
+          (t.orderTypeCode === 'ZWO3' && srExternalNumber)
+            ? srExternalNumber
+            : t.ticketNumber,
         ORDER_TYPE_CODE: t.orderTypeCode,
         STATUS_CODE: statusCode,
         HEAD_FIELD1: isOnlyConsulting ? payload.consultingTypeCode : t.HEAD_FIELD1,
@@ -653,36 +1499,14 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       } catch (soapErr) {
         soapError = soapErr.message;
       }
-
-      // // Log every attempt to sap_sync_log (within same transaction)
-      // await connection.execute(
-      //   `INSERT INTO sap_sync_log 
-      //     (ticket_id, ticket_number, order_type_code, request_payload, response_payload,
-      //      external_ticket_number, status, error_message)
-      //    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      //   [
-      //     t.id,
-      //     t.ticketNumber,
-      //     t.orderTypeCode,
-      //     JSON.stringify(soapPayload),
-      //     JSON.stringify(soapResponse),
-      //     externalTicketNumber,
-      //     soapStatus,
-      //     soapError
-      //   ]
-      // );
-
-      // sapSyncResults.push({ ticketId: t.id, ticketNumber: t.ticketNumber, soapStatus, soapError });
     }
 
-    // Everything succeeded — commit DB + SOAP results together
     await connection.commit();
 
     return {
       success: true,
       ticketId,
-      ticketNumber,
-      // sapSync: sapSyncResults   // frontend can inspect per-ticket SAP outcome
+      ticketNumber
     };
 
   } catch (error) {
@@ -1153,7 +1977,12 @@ exports.updateTicketAgentRemark = async (
     await connection.commit();
 
     //To update on soap api
-
+if(!(
+      (applicationType === "EXCHANGE" || applicationType === "DOA") &&
+      files &&
+      files.length
+    ))
+    {
     process.nextTick(async () => {
 
       const sapConn = await db.getConnection();
@@ -1300,7 +2129,7 @@ exports.updateTicketAgentRemark = async (
 
         const remarkChanged =
           normalizeRemark(currentTicket.agent_remarks) !==
-          normalizeRemark(order.PROBLEM_NOTE);
+          normalizeRemark(order.REPAIR_NOTE);
 
         const productChanged =
           productId && currentTicket.product_id !== productId;
@@ -1331,7 +2160,7 @@ exports.updateTicketAgentRemark = async (
             [
               statusRow?.id,
               stageId,
-              order.PROBLEM_NOTE || null,
+              order.REPAIR_NOTE || null,
               newAssignDate,
               ticketId
             ]
@@ -1544,7 +2373,7 @@ exports.updateTicketAgentRemark = async (
 
       });
 
-    }
+    }}
 
     return { success: true };
 
@@ -2035,31 +2864,81 @@ exports.getL3SlaTickets = async () => {
   }
 };
 
+// exports.getTicketHistory = async (ticketId) => {
+//   const connection = await db.getConnection();
+
+//   try {
+
+//     const [rows] = await connection.execute(
+//       `
+//       SELECT
+//         th.id,
+//         th.ticket_id,
+//         th.remarks,
+//         th.changed_by,
+//         u.name AS changed_by_name,
+//         th.changed_at
+//       FROM ticket_history th
+//       LEFT JOIN users u
+//         ON u.id = th.changed_by
+//       WHERE th.ticket_id = ?
+//       ORDER BY th.changed_at DESC
+//       `,
+//       [ticketId]
+//     );
+
+//     return rows;
+
+//   } finally {
+//     connection.release();
+//   }
+// };
+
 exports.getTicketHistory = async (ticketId) => {
   const connection = await db.getConnection();
-
+ 
   try {
-
     const [rows] = await connection.execute(
       `
       SELECT
         th.id,
         th.ticket_id,
+ 
+        -- Status
+        th.status_id,
+        sm.status_code,
+        sm.status_description,
+ 
+        -- Stage
+        th.stage_id,
+        stm.stage_code,
+        stm.stage_label,
+ 
+        -- Other fields
         th.remarks,
         th.changed_by,
         u.name AS changed_by_name,
         th.changed_at
+ 
       FROM ticket_history th
+ 
       LEFT JOIN users u
         ON u.id = th.changed_by
+ 
+      LEFT JOIN status_master sm
+        ON sm.id = th.status_id
+ 
+      LEFT JOIN stage_master stm
+        ON stm.id = th.stage_id
+ 
       WHERE th.ticket_id = ?
       ORDER BY th.changed_at DESC
       `,
       [ticketId]
     );
-
+ 
     return rows;
-
+ 
   } finally {
     connection.release();
   }

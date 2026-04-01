@@ -100,7 +100,7 @@ function mapDbToSoap(ticketData) {
         IN_PROGRESS: "IN022",
         // IN_PROGRESS: ticketData.STAGE_CODE,
         PROBLEM_NOTE: ticketData.agent_remarks,
-        REPAIR_NOTE: ticketData.REPAIR_NOTE,
+        REPAIR_NOTE: ticketData.agent_remarks,
         CAN_REASN: ticketData.CAN_REASN,
 
         PRODUCT_ID: ticketData.PRODUCT_ID_HISENSE,
@@ -220,7 +220,7 @@ function mapDbToSoapUpdate(ticketData) {
 
         PROBLEM_NOTE: ticketData.agent_remarks,
         PROBLEM_DES: ticketData.problem_note,
-        REPAIR_NOTE: ticketData.REPAIR_NOTE,
+        REPAIR_NOTE: ticketData.agent_remarks,
         CAN_REASN: ticketData.CAN_REASN,
 
         PRODUCT_ID: ticketData.PRODUCT_ID_HISENSE,
