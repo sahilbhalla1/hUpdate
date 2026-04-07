@@ -88,6 +88,7 @@ export default function CreateTicket() {
     IS_CONSULTING: false,
     ticketNumber: "",
     FOLLOW_UP_DATETIME: "",
+    spOrderNumber: "",
   };
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -170,6 +171,7 @@ export default function CreateTicket() {
   const [expandedTimeline, setExpandedTimeline] = useState(null);
   const [timelineData, setTimelineData] = useState({});
   const [timelineLoading, setTimelineLoading] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
 
 const [modelSearch, setModelSearch] = useState("");
  
@@ -183,6 +185,8 @@ const [selectedSrExternal, setSelectedSrExternal] = useState("");
 
   const [phoneSearchLoading, setPhoneSearchLoading] = useState(false);
  
+    const [expandedSection, setExpandedSection] = useState(null);
+
 const filteredServiceTypes = serviceTypes.filter((item) => {
   if (values.Category_Code === "AC1") {
     return true; // show all including 09
@@ -208,6 +212,46 @@ const fetchExistingSR = async (phone) => {
     console.error("SR fetch error", err);
   }
 };
+
+const duplicateKey = `${values.CUSTOMER_ID || ""}-${values.customerProductId || ""}-${values.ORDER_TYPE_ID || ""}`;
+
+const checkDuplicateTicket = async () => {
+  try {
+    const res = await api.post("/tickets/check-duplicate", {
+      orderTypeCode: values.ORDER_TYPE_CODE,
+      customerId: values.CUSTOMER_ID,
+      customerProductId: values.customerProductId,
+      orderTypeId: values.ORDER_TYPE_ID,
+    });
+
+    return res.data.data; // ✅ FIX
+  } catch (err) {
+    console.error("Duplicate check failed", err);
+    return null;
+  }
+};
+
+useEffect(() => {
+  // guard: run only when all required values exist
+  if (selectedTicketId) return;
+  if (
+    !values.CUSTOMER_ID ||
+    !values.customerProductId ||
+    !values.ORDER_TYPE_ID
+  ) {
+    return;
+  }
+
+  const debounce = setTimeout(async () => {
+    const res = await checkDuplicateTicket();
+
+    if (res?.isDuplicate) {
+      toast.warning(res.message || "Open ticket already exists");
+    }
+  }, 400); // debounce to prevent rapid calls
+
+  return () => clearTimeout(debounce);
+}, [duplicateKey, selectedTicketId]);
 
   const isL2 = searchParams.get("l2") === "true";
   const isL3 = searchParams.get("l3") === "true";
@@ -299,6 +343,7 @@ const fetchExistingSR = async (phone) => {
       ticketId: ticketData.id,
       ticketNumber: ticketData.ticketNumber,
       externalTicketNumber: ticketData.externalTicketNumber,
+      spOrderNumber: ticketData.spOrderNumber,
       FOLLOW_UP_DATETIME: ticketData.FOLLOW_UP_DATETIME,
     }));
 
@@ -395,6 +440,7 @@ const fetchExistingSR = async (phone) => {
 
   const clearTicketSelection = () => {
     const phoneFromUrl = searchParams.get("phone");
+
     setSelectedTicketId(null);
     setIsTicketReadOnly(false);
     setPendingProductId(null);
@@ -404,6 +450,8 @@ const fetchExistingSR = async (phone) => {
     setCustomerModels([]);
     setProductIds([]);
     setIsSaved(false);
+setExpandedSection(null);      // ← ADD THIS
+    setExpandedTimeline(null);  
 
     if (phoneFromUrl) {
       // Phone is locked from URL — preserve customer fields, only reset product/ticket fields
@@ -466,11 +514,14 @@ const fetchExistingSR = async (phone) => {
         agent_remarks: "",
         ticketNumber: "",
         ASSIGN_DATE: "",
+        spOrderNumber: "",
       }));
     } else {
       setValues(INITIAL_VALUES);
       setCustomerProducts([]);
       setPincodeData({ pincode: "", city: "", state: "", provinceCode: "", sla: "" });
+      setTicketHistory([]);          // ← ADD THIS
+      setTimelineData({});  
     }
   };
 
@@ -2259,6 +2310,12 @@ useEffect(() => {
   });
 }, [availableStatuses]);
 
+ const groupedHistory = {
+    "Service Request": ticketHistory.filter(t => t.order_type_name === "Service Request"),
+    "Consulting": ticketHistory.filter(t => t.order_type_name === "Consulting"),
+    "Complaint": ticketHistory.filter(t => t.order_type_name === "Escalation"),
+  };
+
   return (
     <div className="bg-linear-to-br from-gray-50 to-blue-50">
       <form onSubmit={handleSubmit} className="max-w-7xl mx-auto space-y-1.5">
@@ -2921,6 +2978,14 @@ useEffect(() => {
                     value={pincodeData.assignDate || values.ASSIGN_DATE}
                     InputLabelProps={{ shrink: true }}
                   />
+                  <FormField
+                    label="Service Provider Number "
+                    name="SP_ORDER"
+                    type="text"
+                    disabled
+                    value={values.spOrderNumber}
+                    InputLabelProps={{ shrink: true }}
+                  />
                 </>
               )}
               {values.ORDER_TYPE_CODE === "ZWO3" && (
@@ -3149,172 +3214,205 @@ useEffect(() => {
           />
         </div>
         {/* Ticket History Section */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {/* Header */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-gray-400" />
               <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Recent Ticket History</span>
             </div>
-            <span className="text-xs text-gray-400">Last 5 tickets</span>
+            <span className="text-xs text-gray-400">Last 5 per type</span>
           </div>
 
           {historyLoading ? (
             <div className="flex justify-center items-center py-6">
               <CircularProgress size={22} />
             </div>
-          ) : ticketHistory.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-xs bg-gray-50">No ticket history found for this customer</div>
           ) : (
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide"></th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Type</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Ticket ID</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">HCRM ID</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created By</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created At</th>
-                   <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Status</th>
-                  <th className="px-2 py-1 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Stage</th>
-                  <th className="px-2 py-1 text-center font-medium text-[10px] text-gray-400 uppercase tracking-wide"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {ticketHistory.map((ticket) => {
-                  // const isOpen = ticket.status?.toLowerCase() === "assigned";
-                    const isOpen =
-  allowedStatuses.includes(ticket.status?.trim().toLowerCase()) &&
-  ticket.order_type_name === "Service Request";
-                  const isSelected = Number(selectedTicketId) === Number(ticket.id);
+            <div className="divide-y divide-gray-100">
+              {[
+                { label: "Service Request", key: "Service Request" },
+                { label: "Consulting", key: "Consulting" },
+                { label: "Complaint", key: "Complaint" },
+              ].map(({ label, key }, sectionIdx) => {
+                const tickets = groupedHistory[key] || [];
+                const isExpanded = expandedSection === key;
 
-                  return (
-                    <>
-                      <tr key={ticket.id} className={`transition-colors duration-100 ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`}>
-                        {/* Radio */}
-                        <td className="px-2 py-1">
-                          <input
-                            type="radio"
-                            name="selectedTicket"
-                            disabled={!isOpen}
-                            checked={isSelected}
-                            onChange={() => handleSelectTicket(ticket)}
-                            className={`h-3.5 w-3.5 ${isOpen ? "cursor-pointer accent-blue-600" : "cursor-not-allowed opacity-30"}`}
-                          />
-                        </td>
+                return (
+                  <div key={key}>
+                    {/* Accordion Header */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSection(isExpanded ? null : key)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <span className="text-xs font-semibold text-gray-700">
+                        {sectionIdx + 1}. {label}
+                        <span className="ml-2 text-gray-400 font-normal">({tickets.length})</span>
+                      </span>
+                      <svg
+                        className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
 
-                        {/* Type */}
-                        <td className="px-2 py-0.5 font-medium text-gray-700 text-[11px]">{ticket.order_type_name}</td>
+                    {/* Accordion Body */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100">
+                        {tickets.length === 0 ? (
+                          <div className="text-center py-5 text-gray-400 text-xs bg-gray-50">
+                            No {label} tickets found
+                          </div>
+                        ) : (
+                          <table className="w-full text-[11px]">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide w-6"></th>
+                                  <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Ticket Type</th>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Ticket ID</th>
 
-                        {/* Ticket ID */}
-                        <td className="px-2 py-0.5 text-gray-500 font-mono text-[11px]">#{ticket.id}</td>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">HCRM ID</th>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created By</th>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Created At</th>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Status</th>
+                                <th className="px-3 py-1.5 text-left font-medium text-[10px] text-gray-400 uppercase tracking-wide">Stage</th>
+                                <th className="px-3 py-1.5 text-center font-medium text-[10px] text-gray-400 uppercase tracking-wide"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {tickets.map((ticket) => {
+                                const isOpen =
+                                  allowedStatuses.includes(ticket.status?.trim().toLowerCase()) &&
+                                  ticket.order_type_name === "Service Request";
+                                const isSelected = Number(selectedTicketId) === Number(ticket.id);
 
-                        {/* HCRM ID */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px]">{ticket.external_ticket_number || "—"}</td>
+                                return (
+                                  <>
+                                    <tr
+                                      key={ticket.id}
+                                      className={`transition-colors duration-100 ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                                    >
+                                      {/* Radio */}
+                                      <td className="px-3 py-1">
+                                        <input
+                                          type="radio"
+                                          name="selectedTicket"
+                                          disabled={!isOpen}
+                                          checked={isSelected}
+                                          onChange={() => handleSelectTicket(ticket)}
+                                          className={`h-3.5 w-3.5 ${isOpen ? "cursor-pointer accent-blue-600" : "cursor-not-allowed opacity-30"}`}
+                                        />
+                                      </td>
+                                       
+                                          <td className="px-3 py-1 text-gray-500">{ticket.order_type_name || "—"}</td>
+                                      {/* Ticket ID */}
+                                      <td className="px-3 py-1 text-gray-500 font-mono">#{ticket.id}</td>
 
-                     
+                                      {/* HCRM ID */}
+                                      <td className="px-3 py-1 text-gray-500">{ticket.external_ticket_number || "—"}</td>
 
-                        {/* Created By */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{ticket.order_source_name}</td>
+                                      {/* Created By */}
+                                      <td className="px-3 py-1 text-gray-500 whitespace-nowrap">{ticket.order_source_name}</td>
 
-                        {/* Created At */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px] whitespace-nowrap">{convertUTCToIST(ticket.createdAt)}</td>
+                                      {/* Created At */}
+                                      <td className="px-3 py-1 text-gray-500 whitespace-nowrap">{convertUTCToIST(ticket.createdAt)}</td>
 
-                       {/* Status */}
-                        <td className="px-3 py-1">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold leading-none ${
-                              ticket.status?.toLowerCase() === "complete"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : ticket.status?.toLowerCase() === "open"
-                                  ? "bg-blue-50 text-blue-700"
-                                  : "bg-amber-50 text-amber-700"
-                            }`}
-                          >
-                            {ticket.status}
-                          </span>
-                        </td>
+                                      {/* Status */}
+                                      <td className="px-3 py-1">
+                                        <span
+                                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold leading-none ${ticket.status?.toLowerCase() === "complete"
+                                              ? "bg-emerald-50 text-emerald-700"
+                                              : ticket.status?.toLowerCase() === "open"
+                                                ? "bg-blue-50 text-blue-700"
+                                                : "bg-amber-50 text-amber-700"
+                                            }`}
+                                        >
+                                          {ticket.status}
+                                        </span>
+                                      </td>
 
-                        {/* Stage */}
-                        <td className="px-2 py-0.5 text-gray-500 text-[11px] max-w-[140px] truncate" title={ticket.stage_label}>
-                          {ticket.stage_label || "—"}
-                        </td>
+                                      {/* Stage */}
+                                      <td className="px-3 py-1 text-gray-500 max-w-[140px] truncate" title={ticket.stage_label}>
+                                        {ticket.stage_label || "—"}
+                                      </td>
 
-                        {/* View */}
-                        <td className="px-2 py-0.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleViewTicket(ticket)}
-                            className={`px-2.5 py-1 text-[10px] cursor-pointer font-medium rounded transition-colors ${
-                              expandedTimeline === ticket.id
-                                ? "text-blue-700 bg-blue-50 hover:bg-blue-100"
-                                : "text-gray-600 bg-gray-100 hover:bg-gray-200"
-                            }`}
-                          >
-                            {expandedTimeline === ticket.id ? "Hide" : "View"}
-                          </button>
-                        </td>
-                      </tr>
-                      {/* Timeline Expand Row */}
-                      {expandedTimeline === ticket.id && (
-                        <tr key={`timeline-${ticket.id}`}>
-                          <td colSpan={9} className="px-0 py-0 bg-slate-50 border-b border-gray-100">
-                            {timelineLoading && !timelineData[ticket.id] ? (
-                              <div className="flex items-center gap-2 px-4 py-3 text-xs text-gray-400">
-                                <CircularProgress size={14} /> Loading timeline...
-                              </div>
-                            ) : !timelineData[ticket.id] || timelineData[ticket.id].length === 0 ? (
-                              <div className="px-4 py-3 text-xs text-gray-400 italic">No timeline events found.</div>
-                            ) : (
-                              <div className="px-4 py-1">
-                                <table className="w-full text-[11px]">
-                                  <thead>
-                                    <tr className="border-b border-slate-200">
-                                      <th className="py-1 pr-2 text-left font-semibold text-gray-500 w-8">#</th>
-                                      <th className="py-1 pr-2 text-left font-semibold text-gray-500 whitespace-nowrap">Remark</th>
-                                      <th className="py-1 pr-2 text-left font-semibold text-gray-500">Created By</th>
-                                      <th className="py-1 text-left font-semibold text-gray-500">Date & Time</th>
-                                      <th className="py-1 text-left font-semibold text-gray-500">Status</th>
-                                      <th className="py-1 text-left font-semibold text-gray-500">Stage</th>
+                                      {/* View */}
+                                      <td className="px-3 py-1 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleViewTicket(ticket)}
+                                          className={`px-2.5 py-1 text-[10px] cursor-pointer font-medium rounded transition-colors ${expandedTimeline === ticket.id
+                                              ? "text-blue-700 bg-blue-50 hover:bg-blue-100"
+                                              : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+                                            }`}
+                                        >
+                                          {expandedTimeline === ticket.id ? "Hide" : "View"}
+                                        </button>
+                                      </td>
                                     </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {timelineData[ticket.id].map((entry, idx) => (
-                                      <tr key={idx} className="hover:bg-slate-100 transition-colors">
-                                        <td className="py-1 pr-2 text-gray-400 font-mono">{idx + 1}</td>
-                                        <td className="py-1 text-gray-600 max-w-xs">{entry.remarks || "—"}</td>
-                                        <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.changed_by_name || "—"}</td>
 
-                                        <td className="py-1 pr-2 text-gray-500 whitespace-nowrap font-mono">
-                                          {entry.changed_at ? convertUTCToIST(entry.changed_at) : "—"}
+                                    {/* Timeline Expand Row */}
+                                    {expandedTimeline === ticket.id && (
+                                      <tr key={`timeline-${ticket.id}`}>
+                                        <td colSpan={8} className="px-0 py-0 bg-slate-50 border-b border-gray-100">
+                                          {timelineLoading && !timelineData[ticket.id] ? (
+                                            <div className="flex items-center gap-2 px-4 py-3 text-xs text-gray-400">
+                                              <CircularProgress size={14} /> Loading timeline...
+                                            </div>
+                                          ) : !timelineData[ticket.id] || timelineData[ticket.id].length === 0 ? (
+                                            <div className="px-4 py-3 text-xs text-gray-400 italic">No timeline events found.</div>
+                                          ) : (
+                                            <div className="px-4 py-1">
+                                              <table className="w-full text-[11px]">
+                                                <thead>
+                                                  <tr className="border-b border-slate-200">
+                                                    <th className="py-1 pr-2 text-left font-semibold text-gray-500 w-8">#</th>
+                                                    <th className="py-1 pr-2 text-left font-semibold text-gray-500">Remark</th>
+                                                    <th className="py-1 pr-2 text-left font-semibold text-gray-500">Created By</th>
+                                                    <th className="py-1 text-left font-semibold text-gray-500">Date & Time</th>
+                                                    <th className="py-1 text-left font-semibold text-gray-500">Status</th>
+                                                    <th className="py-1 text-left font-semibold text-gray-500">Stage</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                  {timelineData[ticket.id].map((entry, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-100 transition-colors">
+                                                      <td className="py-1 pr-2 text-gray-400 font-mono">{idx + 1}</td>
+                                                      <td className="py-1 text-gray-600 max-w-xs">{entry.remarks || "—"}</td>
+                                                      <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.changed_by_name || "—"}</td>
+                                                      <td className="py-1 pr-2 text-gray-500 whitespace-nowrap font-mono">
+                                                        {entry.changed_at ? convertUTCToIST(entry.changed_at) : "—"}
+                                                      </td>
+                                                      <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.status_description || "—"}</td>
+                                                      <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.stage_label || "—"}</td>
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          )}
                                         </td>
-                                         <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.status_description || "—"}</td>
-                                        <td className="py-1 pr-2 text-gray-600 whitespace-nowrap">{entry.stage_label || "—"}</td>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })}
-              </tbody>
-            </table>
+                                    )}
+                                  </>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {/* Footer */}
-          {selectedTicketId && (
-            <div className="flex justify-between items-center px-4 py-2 border-t border-gray-100 bg-gray-50">
-              {ticketDetailsLoading ? (
-                <>
-                  <CircularProgress size={10} color="inherit" />
-                  Loading...
-                </>
-              ) : null}
+          {selectedTicketId && ticketDetailsLoading && (
+            <div className="flex items-center gap-2 px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-400">
+              <CircularProgress size={10} color="inherit" /> Loading...
             </div>
           )}
         </div>

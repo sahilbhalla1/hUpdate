@@ -91,6 +91,7 @@ const Report = () => {
     { field: "agent_remarks", headerName: "Agent Remarks", width: 250 },
     { field: "created_by_email", headerName: "Created By", width: 220 },
     { field: "created_at", headerName: "Created At", width: 170 },
+     { field: "consulting_origin", headerName: "Consulting Origin", width: 220 },
   ];
 
   const rows = reportData?.map((ticket) => {
@@ -137,6 +138,14 @@ const Report = () => {
       agent_remarks: ticket.agent_remarks || "-",
       created_by_email: ticket.created_by_email || "-",
       created_at: convertUTCToIST(ticket.created_at),
+      consulting_origin:
+  ticket.consulting_origin === "SR"
+    ? "Service Request"
+    : ticket.consulting_origin === "CO"
+    ? "Complaint"
+    : ticket.consulting_origin === "SELF"
+    ? "SELF"
+    : "-",
     };
   });
 
