@@ -357,25 +357,53 @@ exports.fetchSoapServiceOrder = async (req, res) => {
   res.json(result);
 };
 
+// exports.getTicketReportByDate = async (req, res) => {
+//   try {
+
+//     const { fromDate, toDate } = req.query;
+
+//     const data = await ticketService.getTicketReportByDate({
+//       fromDate,
+//       toDate
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       count: data.length,
+//       data
+//     });
+
+//   } catch (error) {
+//     console.error('Report Error:', error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// };
+
 exports.getTicketReportByDate = async (req, res) => {
   try {
-
-    const { fromDate, toDate } = req.query;
-
+ 
+    const { fromDate, toDate , orderTypeId, statusId } = req.query;
+ 
     const data = await ticketService.getTicketReportByDate({
       fromDate,
-      toDate
+      toDate,
+      orderTypeId: orderTypeId || null,
+      statusId: statusId || null,
     });
-
+ 
     return res.status(200).json({
       success: true,
       count: data.length,
       data
     });
-
+ 
   } catch (error) {
     console.error('Report Error:', error);
-
+ 
     return res.status(500).json({
       success: false,
       message: error.message

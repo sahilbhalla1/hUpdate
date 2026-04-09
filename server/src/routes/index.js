@@ -29,7 +29,6 @@ const subcategory = require("../modules/product_master/subcategory/subcategory.r
 const modelSpec = require("../modules/product_master/modelSpec/modelSpec.routes");
 const customerModel = require("../modules/product_master/customerModel/customerModel.route");
 const product = require("../modules/product_master/product/product.route");
-
 // Middlewares
 const authMiddleware = require('../middleware/auth');
 

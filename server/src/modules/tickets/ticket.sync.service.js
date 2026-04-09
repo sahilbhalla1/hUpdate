@@ -82,7 +82,7 @@ exports.syncServiceOrdersFromSAP = async (payload) => {
                 if (!ticket) continue;
 
                 const ticketId = ticket.id;
-                
+
                 if (order.SP_ORDER) {
     await connection.execute(
         `UPDATE tickets

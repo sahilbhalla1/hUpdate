@@ -1,7 +1,13 @@
-function mapFrontendToDb(data) {
+function sanitizeString(value) {
+  if (!value) return value;
 
-    console.log("datadds", data);
-    
+  return value
+    .replace(/[^\w\s.-]/g, '')   // remove special chars
+    .replace(/\s+/g, ' ')        // normalize spaces
+    .trim();
+}
+
+function mapFrontendToDb(data) {
     return {
         customerId: data.CUSTOMER_ID,
         title: data.TITLE,
@@ -86,10 +92,10 @@ function mapDbToSoap(ticketData) {
         LINE_ID: 1,
         CATEGORY_CODE: ticketData.Category_Code,
         ORDER_TYPE: ticketData.ORDER_TYPE_CODE,
-        ORDER_SOURCE: ticketData.ORDER_TYPE_CODE === "ZSV1" ? ticketData.ORDER_SOURCE_CODE : ticketData.ORDER_TYPE_CODE,
+        ORDER_SOURCE: ticketData.ORDER_SOURCE_CODE,
         SERVICE_TYPE: ticketData.SERVICE_TYPE_CODE,
 
-        PROBLEM_DES: ticketData.problem_note,
+        PROBLEM_DES: sanitizeString(ticketData.problem_note),
         SALES_ORG: "O 50000615",
         DIS_CHANNEL: "11",
         DIVISION: "00",
@@ -103,8 +109,8 @@ function mapDbToSoap(ticketData) {
         WARRANTYPE: ticketData.WARRANTYPEID,
         IN_PROGRESS: "IN022",
         // IN_PROGRESS: ticketData.STAGE_CODE,
-        PROBLEM_NOTE: ticketData.agent_remarks,
-        REPAIR_NOTE: ticketData.agent_remarks,
+        PROBLEM_NOTE: sanitizeString(ticketData.agent_remarks),
+        REPAIR_NOTE: sanitizeString(ticketData.agent_remarks),
         CAN_REASN: ticketData.CAN_REASN,
 
         PRODUCT_ID: ticketData.PRODUCT_ID_HISENSE,
@@ -209,7 +215,7 @@ function mapDbToSoapUpdate(ticketData) {
         OBJECT_ID: ticketData.externalTicketNumber,
 
         // SP_ORDER: ticketData.ticketNumber,
-        ORDER_SOURCE: ticketData.ORDER_TYPE_CODE === "ZSV1" ? ticketData.ORDER_SOURCE_CODE : ticketData.ORDER_TYPE_CODE,
+        ORDER_SOURCE: ticketData.ORDER_SOURCE_CODE,
 
         ORDER_TYPE: ticketData.ORDER_TYPE_CODE,
         ORDER_STATUS: ticketData.STATUS_CODE,
@@ -222,9 +228,9 @@ function mapDbToSoapUpdate(ticketData) {
 
         IN_PROGRESS: ticketData.STAGE_CODE,
 
-        PROBLEM_NOTE: ticketData.agent_remarks,
-        PROBLEM_DES: ticketData.problem_note,
-        REPAIR_NOTE: ticketData.agent_remarks,
+        PROBLEM_NOTE: sanitizeString(ticketData.agent_remarks),
+        PROBLEM_DES: sanitizeString(ticketData.problem_note),
+        REPAIR_NOTE: sanitizeString(ticketData.agent_remarks),
         CAN_REASN: ticketData.CAN_REASN,
 
         PRODUCT_ID: ticketData.PRODUCT_ID_HISENSE,
@@ -264,7 +270,7 @@ function mapDbToSoapUpdate(ticketData) {
         FIRMWARE: "",
 
         HEAD_FIELD1: "",
-        HEAD_FIELD2: "",
+        HEAD_FIELD2: ticketData.ORDER_TYPE_CODE === "ZSV1" ?ticketData.PURCHASE_CHANNEL==="Online"?10:20:'',
         HEAD_FIELD3: "",
         HEAD_FIELD4: "",
         HEAD_FIELD5: "",
