@@ -471,10 +471,15 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
   let srTicketId = null;
   let srTicketNumber = null;
 
+  
+
   try {
     await connection.beginTransaction();
 
     payload = mapFrontendToDb(frontendPayload);
+
+    console.log("pay::",payload);
+    
 
     const customerId = await resolveCustomer(connection, payload);
     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
@@ -497,13 +502,18 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
     consultingTypeCode = null;
 
     const isComplaint = payload.orderTypeCode === 'ZWO3';
-    const hasExistingSR = !!payload.externalServiceRequestNumber;
+    // const hasExistingSR = !!payload.externalServiceRequestNumber;
+
+      const hasExistingSR = !!payload.srExternalTicket;
+
+    console.log(" hasExistingSR", hasExistingSR);
+    
 
     // =========================
     // 🔥 SR HANDLING
     // =========================
     if (isComplaint && hasExistingSR) {
-      srExternalNumber = payload.externalServiceRequestNumber;
+      srExternalNumber = payload.srExternalTicket;
     }
 
     if (isComplaint && !hasExistingSR) {
@@ -555,38 +565,40 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       );
 
       // ✅ SR HISTORY (FIXED)
-      await connection.execute(
+   const res=   await connection.execute(
         `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
          VALUES (?, ?, ?, ?, ?)`,
         [srTicketId, srStatusId, srStageId, payload.agentRemarks ?? null, userId]
       );
 
+      console.log(res);
+      
       // 🔥 SR SOAP
-      const srSoapResponse = await createHisenseOrder({
-        payload: mapDbToSoap({
-          ...frontendPayload,
-          SP_ORDER: srTicketNumber,
-          ORDER_TYPE_CODE: 'ZSV1',
-           STATUS_CODE: "E0002",
-        HEAD_FIELD1:'',
-        HEAD_FIELD3:'',
-          CREATE_USER: userName
-        }),
-        ticketId: srTicketId,
-        ticketNumber: srTicketNumber,
-        orderTypeCode: 'ZSV1'
-      });
+      // const srSoapResponse = await createHisenseOrder({
+      //   payload: mapDbToSoap({
+      //     ...frontendPayload,
+      //     SP_ORDER: srTicketNumber,
+      //     ORDER_TYPE_CODE: 'ZSV1',
+      //      STATUS_CODE: "E0002",
+      //   HEAD_FIELD1:'',
+      //   HEAD_FIELD3:'',
+      //     CREATE_USER: userName
+      //   }),
+      //   ticketId: srTicketId,
+      //   ticketNumber: srTicketNumber,
+      //   orderTypeCode: 'ZSV1'
+      // });
 
-      if (!srSoapResponse.success || !srSoapResponse.objectId) {
-        throw new Error('SR creation failed, cannot proceed with complaint');
-      }
+      // if (!srSoapResponse.success || !srSoapResponse.objectId) {
+      //   throw new Error('SR creation failed, cannot proceed with complaint');
+      // }
 
-      srExternalNumber = srSoapResponse.objectId;
+      // srExternalNumber = srSoapResponse.objectId;
 
-      await connection.execute(
-        `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
-        [srExternalNumber, srTicketId]
-      );
+      // await connection.execute(
+      //   `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+      //   [srExternalNumber, srTicketId]
+      // );
     }
 
     // =========================

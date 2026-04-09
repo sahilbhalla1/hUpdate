@@ -1,4 +1,7 @@
 function mapFrontendToDb(data) {
+
+    console.log("datadds", data);
+    
     return {
         customerId: data.CUSTOMER_ID,
         title: data.TITLE,
@@ -46,6 +49,7 @@ function mapFrontendToDb(data) {
         consultingType: data.CONSULTING_TYPE,
         statusId: data.STATUS_ID,
         stageId: data.STAGE_ID ?? null,
+        srExternalTicket: data.srExternalTicket,
 
         socialX: data.END_Socials.x ?? null,
         socialFacebook: data.END_Socials.facebook ?? null,
