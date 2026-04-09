@@ -478,8 +478,7 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
 
     payload = mapFrontendToDb(frontendPayload);
 
-    console.log("pay::",payload);
-    
+ 
 
     const customerId = await resolveCustomer(connection, payload);
     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
@@ -506,7 +505,6 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
 
       const hasExistingSR = !!payload.srExternalTicket;
 
-    console.log(" hasExistingSR", hasExistingSR);
     
 
     // =========================
@@ -565,40 +563,41 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
       );
 
       // ✅ SR HISTORY (FIXED)
-   const res=   await connection.execute(
+      await connection.execute(
         `INSERT INTO ticket_history (ticket_id, status_id, stage_id, remarks, changed_by)
          VALUES (?, ?, ?, ?, ?)`,
         [srTicketId, srStatusId, srStageId, payload.agentRemarks ?? null, userId]
       );
 
-      console.log(res);
       
       // 🔥 SR SOAP
-      // const srSoapResponse = await createHisenseOrder({
-      //   payload: mapDbToSoap({
-      //     ...frontendPayload,
-      //     SP_ORDER: srTicketNumber,
-      //     ORDER_TYPE_CODE: 'ZSV1',
-      //      STATUS_CODE: "E0002",
-      //   HEAD_FIELD1:'',
-      //   HEAD_FIELD3:'',
-      //     CREATE_USER: userName
-      //   }),
-      //   ticketId: srTicketId,
-      //   ticketNumber: srTicketNumber,
-      //   orderTypeCode: 'ZSV1'
-      // });
+      const srSoapResponse = await createHisenseOrder({
+        payload: mapDbToSoap({
+          ...frontendPayload,
+          SP_ORDER: srTicketNumber,
+          ORDER_TYPE_CODE: 'ZSV1',
+           STATUS_CODE: "E0002",
+        HEAD_FIELD1:'',
+        HEAD_FIELD3:'',
+        HEAD_FIELD2:payload.PURCHASE_CHANNEL==="Online"?10:20,
 
-      // if (!srSoapResponse.success || !srSoapResponse.objectId) {
-      //   throw new Error('SR creation failed, cannot proceed with complaint');
-      // }
+          CREATE_USER: userName
+        }),
+        ticketId: srTicketId,
+        ticketNumber: srTicketNumber,
+        orderTypeCode: 'ZSV1'
+      });
 
-      // srExternalNumber = srSoapResponse.objectId;
+      if (!srSoapResponse.success || !srSoapResponse.objectId) {
+        throw new Error('SR creation failed, cannot proceed with complaint');
+      }
 
-      // await connection.execute(
-      //   `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
-      //   [srExternalNumber, srTicketId]
-      // );
+      srExternalNumber = srSoapResponse.objectId;
+
+      await connection.execute(
+        `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+        [srExternalNumber, srTicketId]
+      );
     }
 
     // =========================
@@ -717,7 +716,7 @@ if (payload.orderTypeCode === 'ZWO4') {
 
       const consultingOrderTypeId = consultingOrderTypeRow[0].id;
 
-      consultingTypeCode = 'W01';
+      consultingTypeCode = 'C01';
       const resolvedConsultingTypeId = await resolveConsultingTypeByCode(connection, consultingTypeCode, "General Inquiry");
 
       autoStatusId = await resolveStatusByCode(connection, 'E0003', 'ZWO4');
@@ -815,7 +814,8 @@ if (payload.orderTypeCode === 'ZSV1') {
         ORDER_TYPE_CODE: t.orderTypeCode,
         STATUS_CODE: statusCode,
         HEAD_FIELD1: isOnlyConsulting ? payload.consultingTypeCode : t.HEAD_FIELD1,
-        HEAD_FIELD3: isOnlyConsulting ? 'X' : '',
+        HEAD_FIELD3: payload.orderTypeCode === 'ZWO4' ? 'X' : '',
+        HEAD_FIELD2: t.orderTypeCode === 'ZSV1'? payload.PURCHASE_CHANNEL==="Online"?10:20:'',
         CREATE_USER: userName
       });
 
@@ -1216,8 +1216,8 @@ exports.updateTicketAgentRemark = async (
 
       const consultingOrderTypeId = consultingOrderTypeRows[0].id;
 
-      if (orderTypeCode === "ZSV1") consultingTypeCode = "W01";
-      else if (orderTypeCode === "ZWO3") consultingTypeCode = "W01";
+      if (orderTypeCode === "ZSV1") consultingTypeCode = "C01";
+      else if (orderTypeCode === "ZWO3") consultingTypeCode = "C01";
 
       const [consultingTypeRows] = await connection.execute(
         `SELECT id 
@@ -1612,6 +1612,7 @@ if(!(
           cp.serial_no AS SERIALNO,
           cp.serial_no_alt AS ZZZSERIALNO1,
           cp.purchase_date AS PURCHASE_DATE,
+          cp.purchase_channel AS PURCHASE_CHANNEL,
           s1.symptom_1_code AS SYMPTOM_1_CODE,
           cat.code AS Category_Code,
           d.defect_code AS DEFECT_CODE,
@@ -1712,7 +1713,7 @@ if(!(
             SERVICE_TYPE: '',
             IN_PROGRESS: '',
             HEAD_FIELD1: consultingTypeCode,
-            HEAD_FIELD3: "X",
+            HEAD_FIELD3: "",
             ORDER_SOURCE: 'ZWO4'
           });
           //To change on live 
@@ -2427,138 +2428,231 @@ exports.getTicketHistory = async (ticketId) => {
   }
 };
 
-exports.getTicketReportByDate = async ({ fromDate, toDate }) => {
+// exports.getTicketReportByDate = async ({ fromDate, toDate }) => {
 
-  if (!fromDate || !toDate) {
-    throw new Error('fromDate and toDate are required');
-  }
+//   if (!fromDate || !toDate) {
+//     throw new Error('fromDate and toDate are required');
+//   }
 
+//   const connection = await db.getConnection();
+//   const startDate = `${fromDate} 00:00:00`;
+//   const endDate = `${toDate} 23:59:59`;
+//   try {
+
+//     const [rows] = await connection.execute(
+//       `
+// SELECT
+ 
+//     t.id AS ticket_id,
+//     t.external_ticket_number,
+//     t.created_at,
+//     u.email AS created_by_email,
+ 
+//     -- Customer
+//     c.first_name,
+//     c.last_name,
+//     c.primary_phone,
+ 
+//     -- Product Hierarchy
+//     cat.name AS category_name,
+//     sc.name AS sub_category_name,
+//     ms.spec_value,
+//     cm.model_number,
+//     pi.product_code,
+ 
+//     -- Product Instance
+//     cp.product_id,
+//     cp.serial_no,
+//     cp.serial_no_alt,
+//     cp.purchase_date,
+//     cp.purchase_channel,
+//     cp.purchase_partner,
+//     cp.warranty_type_id,
+ 
+//     -- Agent Input
+//     ot.order_type_name,
+//     os.source_name,
+//     stype.service_type_name,
+//     ct.complaint_type_name,
+//     cst.consulting_type_name,
+//     t.consulting_origin,  
+//     s1.symptom_1_name,
+//     s2.symptom_2_name,
+//     sec.description AS section_name,
+//     d.defect_description,
+//     r.repair_description,
+//     t.condition_flag,
+//     sm.status_description,
+//     sg.stage_label,
+//     t.assign_date,
+//     t.expected_closure_date,
+ 
+//     -- Notes
+//     t.problem_note,
+//     t.agent_remarks
+ 
+// FROM tickets t
+ 
+// JOIN customers c 
+//     ON c.id = t.customer_id
+ 
+// JOIN customer_products cp 
+//     ON cp.id = t.customer_product_id
+
+// -- Created By
+// LEFT JOIN users u
+//     ON u.id = t.created_by
+ 
+// -- Product chain
+// LEFT JOIN product_ids pi 
+//     ON pi.id = cp.product_id
+ 
+// LEFT JOIN customer_models cm 
+//     ON cm.id = pi.customer_model_id
+ 
+// LEFT JOIN model_specifications ms 
+//     ON ms.id = cm.model_spec_id
+ 
+// LEFT JOIN sub_categories sc 
+//     ON sc.id = ms.sub_category_id
+ 
+// LEFT JOIN categories cat 
+//     ON cat.id = sc.category_id
+ 
+// -- Other masters
+// LEFT JOIN order_type_master ot 
+//     ON ot.id = t.order_type_id
+ 
+// LEFT JOIN order_source_master os 
+//     ON os.id = t.order_source_id
+ 
+// LEFT JOIN service_type_master stype 
+//     ON stype.id = t.service_type_id
+ 
+// LEFT JOIN complaint_type_master ct 
+//     ON ct.id = t.complaint_type_id
+ 
+// LEFT JOIN consulting_type_master cst 
+//     ON cst.id = t.consulting_type_id
+ 
+// LEFT JOIN symptom_level_1_master s1 
+//     ON s1.id = t.symptom_l1_id
+ 
+// LEFT JOIN symptom_level_2_master s2 
+//     ON s2.id = t.symptom_l2_id
+ 
+// LEFT JOIN section_master sec 
+//     ON sec.id = t.section_id
+ 
+// LEFT JOIN defect_master d 
+//     ON d.id = t.defect_id
+ 
+// LEFT JOIN repair_action_master r 
+//     ON r.id = t.repair_action_id
+ 
+// LEFT JOIN status_master sm 
+//     ON sm.id = t.current_status_id
+ 
+// LEFT JOIN stage_master sg 
+//     ON sg.id = t.current_stage_id
+//        WHERE t.created_at >= ? 
+//   AND t.created_at < ?
+// ORDER BY t.created_at DESC
+//       `,
+//       [startDate, endDate]
+//     );
+
+//     return rows;
+
+//   } finally {
+//     connection.release();
+//   }
+// };
+
+exports.getTicketReportByDate = async ({ fromDate, toDate, orderTypeId, statusId }) => {
+  if (!fromDate || !toDate) throw new Error('fromDate and toDate are required');
+ 
   const connection = await db.getConnection();
   const startDate = `${fromDate} 00:00:00`;
-  const endDate = `${toDate} 23:59:59`;
+  const endDate   = `${toDate} 23:59:59`;
+  const params    = [startDate, endDate];
+
+ 
+ 
+ 
+  // Build optional filter clauses
+  let extraFilters = "";
+  if (orderTypeId) {
+    extraFilters += " AND t.order_type_id = ?";
+    params.push(Number(orderTypeId));
+  }
+ 
+ 
+ 
+  if (statusId) {
+    extraFilters += " AND t.current_status_id = ?";
+      params.push(Number(statusId));
+  }
+ 
   try {
 
     const [rows] = await connection.execute(
       `
-SELECT
- 
-    t.id AS ticket_id,
-    t.external_ticket_number,
-    t.created_at,
-    u.email AS created_by_email,
- 
-    -- Customer
-    c.first_name,
-    c.last_name,
-    c.primary_phone,
- 
-    -- Product Hierarchy
-    cat.name AS category_name,
-    sc.name AS sub_category_name,
-    ms.spec_value,
-    cm.model_number,
-    pi.product_code,
- 
-    -- Product Instance
-    cp.product_id,
-    cp.serial_no,
-    cp.serial_no_alt,
-    cp.purchase_date,
-    cp.purchase_channel,
-    cp.purchase_partner,
-    cp.warranty_type_id,
- 
-    -- Agent Input
-    ot.order_type_name,
-    os.source_name,
-    stype.service_type_name,
-    ct.complaint_type_name,
-    cst.consulting_type_name,
-    t.consulting_origin,  
-    s1.symptom_1_name,
-    s2.symptom_2_name,
-    sec.description AS section_name,
-    d.defect_description,
-    r.repair_description,
-    t.condition_flag,
-    sm.status_description,
-    sg.stage_label,
-    t.assign_date,
-    t.expected_closure_date,
- 
-    -- Notes
-    t.problem_note,
-    t.agent_remarks
- 
-FROM tickets t
- 
-JOIN customers c 
-    ON c.id = t.customer_id
- 
-JOIN customer_products cp 
-    ON cp.id = t.customer_product_id
-
--- Created By
-LEFT JOIN users u
-    ON u.id = t.created_by
- 
--- Product chain
-LEFT JOIN product_ids pi 
-    ON pi.id = cp.product_id
- 
-LEFT JOIN customer_models cm 
-    ON cm.id = pi.customer_model_id
- 
-LEFT JOIN model_specifications ms 
-    ON ms.id = cm.model_spec_id
- 
-LEFT JOIN sub_categories sc 
-    ON sc.id = ms.sub_category_id
- 
-LEFT JOIN categories cat 
-    ON cat.id = sc.category_id
- 
--- Other masters
-LEFT JOIN order_type_master ot 
-    ON ot.id = t.order_type_id
- 
-LEFT JOIN order_source_master os 
-    ON os.id = t.order_source_id
- 
-LEFT JOIN service_type_master stype 
-    ON stype.id = t.service_type_id
- 
-LEFT JOIN complaint_type_master ct 
-    ON ct.id = t.complaint_type_id
- 
-LEFT JOIN consulting_type_master cst 
-    ON cst.id = t.consulting_type_id
- 
-LEFT JOIN symptom_level_1_master s1 
-    ON s1.id = t.symptom_l1_id
- 
-LEFT JOIN symptom_level_2_master s2 
-    ON s2.id = t.symptom_l2_id
- 
-LEFT JOIN section_master sec 
-    ON sec.id = t.section_id
- 
-LEFT JOIN defect_master d 
-    ON d.id = t.defect_id
- 
-LEFT JOIN repair_action_master r 
-    ON r.id = t.repair_action_id
- 
-LEFT JOIN status_master sm 
-    ON sm.id = t.current_status_id
- 
-LEFT JOIN stage_master sg 
-    ON sg.id = t.current_stage_id
-       WHERE t.created_at >= ? 
-  AND t.created_at < ?
-ORDER BY t.created_at DESC
+      SELECT
+          t.id AS ticket_id,
+          t.external_ticket_number,
+          t.created_at,
+          u.email AS created_by_email,
+          c.first_name, c.last_name, c.primary_phone,
+          cat.name AS category_name,
+          sc.name AS sub_category_name,
+          ms.spec_value,
+          cm.model_number,
+          pi.product_code,
+          cp.product_id, cp.serial_no, cp.serial_no_alt,
+          cp.purchase_date, cp.purchase_channel, cp.purchase_partner, cp.warranty_type_id,
+          ot.order_type_name,
+          os.source_name,
+          stype.service_type_name,
+          ct.complaint_type_name,
+          cst.consulting_type_name,
+          t.consulting_origin,
+          s1.symptom_1_name,
+          s2.symptom_2_name,
+          sec.description AS section_name,
+          d.defect_description,
+          r.repair_description,
+          t.condition_flag,
+          sm.status_description,
+          sg.stage_label,
+          t.assign_date, t.expected_closure_date,
+          t.problem_note, t.agent_remarks
+      FROM tickets t
+      JOIN customers c ON c.id = t.customer_id
+      JOIN customer_products cp ON cp.id = t.customer_product_id
+      LEFT JOIN users u ON u.id = t.created_by
+      LEFT JOIN product_ids pi ON pi.id = cp.product_id
+      LEFT JOIN customer_models cm ON cm.id = pi.customer_model_id
+      LEFT JOIN model_specifications ms ON ms.id = cm.model_spec_id
+      LEFT JOIN sub_categories sc ON sc.id = ms.sub_category_id
+      LEFT JOIN categories cat ON cat.id = sc.category_id
+      LEFT JOIN order_type_master ot ON ot.id = t.order_type_id
+      LEFT JOIN order_source_master os ON os.id = t.order_source_id
+      LEFT JOIN service_type_master stype ON stype.id = t.service_type_id
+      LEFT JOIN complaint_type_master ct ON ct.id = t.complaint_type_id
+      LEFT JOIN consulting_type_master cst ON cst.id = t.consulting_type_id
+      LEFT JOIN symptom_level_1_master s1 ON s1.id = t.symptom_l1_id
+      LEFT JOIN symptom_level_2_master s2 ON s2.id = t.symptom_l2_id
+      LEFT JOIN section_master sec ON sec.id = t.section_id
+      LEFT JOIN defect_master d ON d.id = t.defect_id
+      LEFT JOIN repair_action_master r ON r.id = t.repair_action_id
+      LEFT JOIN status_master sm ON sm.id = t.current_status_id
+      LEFT JOIN stage_master sg ON sg.id = t.current_stage_id
+      WHERE t.created_at >= ? AND t.created_at < ?
+      ${extraFilters}
+      ORDER BY t.created_at DESC
       `,
-      [startDate, endDate]
+      params
     );
 
     return rows;
