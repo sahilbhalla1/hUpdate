@@ -29,6 +29,8 @@ const subcategory = require("../modules/product_master/subcategory/subcategory.r
 const modelSpec = require("../modules/product_master/modelSpec/modelSpec.routes");
 const customerModel = require("../modules/product_master/customerModel/customerModel.route");
 const product = require("../modules/product_master/product/product.route");
+const consulting=require("../modules/consulting_tracking/consulting_tracking.routes");
+const transferticket=require("../modules/transferticket/transferticket.routes");
 // Middlewares
 const authMiddleware = require('../middleware/auth');
 
@@ -63,5 +65,8 @@ router.use("/pro-mst/sub", subcategory);
 router.use("/modspec", modelSpec);
 router.use("/customer-models", customerModel);
 router.use("/products", product);
+router.use("/consulting", consulting);
+router.use("/transfer-ticket",transferticket)
+ 
 module.exports = router;
 

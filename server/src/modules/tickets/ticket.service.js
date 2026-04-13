@@ -461,7 +461,140 @@ const resolveStageByCode = async (connection, stageCode, orderType) => {
   return rows[0].id;
 };
 
+async function createTransferredTicket(frontendPayload, userId) {
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const payload = mapFrontendToDb(frontendPayload);
+
+    const customerId = await resolveCustomer(connection, payload);
+    const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
+    const orderTypeId = await resolveOrderType(connection, payload.orderTypeCode);
+
+    const consultingTypeId = await resolveConsultingType(
+      connection,
+      payload.orderTypeCode,
+      payload.consultingTypeCode,
+      payload.consultingType
+    );
+
+    const complaintTypeId = await resolveComplaintType(
+      connection,
+      payload.orderTypeCode,
+      payload.complaintTypeCode
+    );
+
+    // ✅ Resolve Status
+    const statusId = payload.statusId
+      ? payload.statusId
+      : await resolveStatusByCode(connection, 'E0002', payload.orderTypeCode);
+
+    // ✅ Validate / Resolve Stage
+    let stageId = null;
+
+    if (payload.stageId !== undefined && payload.stageId !== null && payload.stageId !== "") {
+      const [validStage] = await connection.execute(
+        `SELECT 1 FROM stage_master WHERE id = ? LIMIT 1`,
+        [payload.stageId]
+      );
+
+      if (!validStage.length) throw new Error('Invalid stage');
+
+      stageId = payload.stageId;
+    }
+
+    const [result] = await connection.execute(
+      `INSERT INTO tickets (
+        customer_id,
+        customer_product_id,
+        order_type_id,
+ 
+        order_source_id,
+        service_type_id,
+        symptom_l1_id,
+        symptom_l2_id,
+ 
+        section_id,
+        defect_id,
+        repair_action_id,
+        condition_flag,
+ 
+        problem_note,
+        agent_remarks,
+        assign_date,
+ 
+        consulting_type_id,
+        complaint_type_id,
+ 
+   
+ 
+        created_by,
+ 
+        is_transferred,
+        transfer_status
+ 
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, 'PENDING')`,
+      [
+        customerId,
+        customerProductId,
+        orderTypeId,
+
+        payload.orderSourceId,
+        normalizeInt(payload.serviceTypeId) ?? null,
+        normalizeInt(payload.symptom1Id) ?? null,
+        normalizeInt(payload.symptom2Id) ?? null,
+
+        normalizeInt(payload.sectionId) ?? null,
+        normalizeInt(payload.defectId) ?? null,
+        normalizeInt(payload.repairActionId) ?? null,
+        normalizeInt(payload.conditionFlag) ?? null,
+
+        payload.problemNote ?? null,
+        payload.agentRemarks ?? null,
+        payload.assignDate ?? null,
+
+        consultingTypeId,
+        complaintTypeId,
+
+        userId
+      ]
+    );
+
+    const ticketId = result.insertId;
+
+    const ticketNumber = generateTicketNumber(ticketId, payload.orderTypeCode);
+
+    await connection.execute(
+      `UPDATE tickets SET ticket_number = ? WHERE id = ?`,
+      [ticketNumber, ticketId]
+    );
+
+    await connection.commit();
+
+    return {
+      success: true,
+      ticketId,
+      ticketNumber,
+      type: 'TRANSFER'
+    };
+
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
 exports.createTicket = async (frontendPayload, userId, userName) => {
+
+  // 🔥 HANDLE TRANSFER FIRST
+  if (frontendPayload.isTransferred === true) {
+    return await createTransferredTicket(frontendPayload, userId);
+  }
+
   const connection = await db.getConnection();
 
   let ticketId, ticketNumber, consultingTicketId, consultingTicketNumber,
@@ -471,14 +604,14 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
   let srTicketId = null;
   let srTicketNumber = null;
 
-  
+
 
   try {
     await connection.beginTransaction();
 
     payload = mapFrontendToDb(frontendPayload);
 
- 
+
 
     const customerId = await resolveCustomer(connection, payload);
     const customerProductId = await resolveCustomerProduct(connection, customerId, payload);
@@ -503,9 +636,9 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
     const isComplaint = payload.orderTypeCode === 'ZWO3';
     // const hasExistingSR = !!payload.externalServiceRequestNumber;
 
-      const hasExistingSR = !!payload.srExternalTicket;
+    const hasExistingSR = !!payload.srExternalTicket;
 
-    
+
 
     // =========================
     // 🔥 SR HANDLING
@@ -569,24 +702,24 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
         [srTicketId, srStatusId, srStageId, payload.agentRemarks ?? null, userId]
       );
 
-      
-      // 🔥 SR SOAP
-      const srSoapResponse = await createHisenseOrder({
-        payload: mapDbToSoap({
-          ...frontendPayload,
-          SP_ORDER: srTicketNumber,
-          ORDER_TYPE_CODE: 'ZSV1',
-           STATUS_CODE: "E0002",
-        HEAD_FIELD1:'',
-        HEAD_FIELD3:'',
-        HEAD_FIELD2:payload.PURCHASE_CHANNEL==="Online"?10:20,
 
-          CREATE_USER: userName
-        }),
-        ticketId: srTicketId,
-        ticketNumber: srTicketNumber,
-        orderTypeCode: 'ZSV1'
-      });
+      // 🔥 SR SOAP
+      // const srSoapResponse = await createHisenseOrder({
+      //   payload: mapDbToSoap({
+      //     ...frontendPayload,
+      //     SP_ORDER: srTicketNumber,
+      //     ORDER_TYPE_CODE: 'ZSV1',
+      //      STATUS_CODE: "E0002",
+      //   HEAD_FIELD1:'',
+      //   HEAD_FIELD3:'',
+      //   HEAD_FIELD2:payload.PURCHASE_CHANNEL==="Online"?10:20,
+
+      //     CREATE_USER: userName
+      //   }),
+      //   ticketId: srTicketId,
+      //   ticketNumber: srTicketNumber,
+      //   orderTypeCode: 'ZSV1'
+      // });
 
       if (!srSoapResponse.success || !srSoapResponse.objectId) {
         throw new Error('SR creation failed, cannot proceed with complaint');
@@ -615,8 +748,8 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
     //   const duplicateQuery = `
     //     SELECT t.id
     //     FROM tickets t
-    //     JOIN status_master sm 
-    //       ON sm.id = t.current_status_id 
+    //     JOIN status_master sm
+    //       ON sm.id = t.current_status_id
     //       AND sm.order_type = ?
     //     WHERE t.customer_id = ?
     //       AND t.customer_product_id = ?
@@ -647,9 +780,9 @@ exports.createTicket = async (frontendPayload, userId, userName) => {
 
     let mainConsultingOrigin = null;
 
-if (payload.orderTypeCode === 'ZWO4') {
-  mainConsultingOrigin = 'SELF';
-}
+    if (payload.orderTypeCode === 'ZWO4') {
+      mainConsultingOrigin = 'SELF';
+    }
     // =========================
     // MAIN TICKET
     // =========================
@@ -723,11 +856,11 @@ if (payload.orderTypeCode === 'ZWO4') {
 
       let consultingOrigin = 'SELF';
 
-if (payload.orderTypeCode === 'ZSV1') {
-  consultingOrigin = 'SR';
-} else if (payload.orderTypeCode === 'ZWO3') {
-  consultingOrigin = 'CO';
-}
+      if (payload.orderTypeCode === 'ZSV1') {
+        consultingOrigin = 'SR';
+      } else if (payload.orderTypeCode === 'ZWO3') {
+        consultingOrigin = 'CO';
+      }
 
       const [consultingResult] = await connection.execute(
         `INSERT INTO tickets (
@@ -815,7 +948,7 @@ if (payload.orderTypeCode === 'ZSV1') {
         STATUS_CODE: statusCode,
         HEAD_FIELD1: isOnlyConsulting ? payload.consultingTypeCode : t.HEAD_FIELD1,
         HEAD_FIELD3: payload.orderTypeCode === 'ZWO4' ? 'X' : '',
-        HEAD_FIELD2: t.orderTypeCode === 'ZSV1'? payload.PURCHASE_CHANNEL==="Online"?10:20:'',
+        HEAD_FIELD2: t.orderTypeCode === 'ZSV1' ? payload.PURCHASE_CHANNEL === "Online" ? 10 : 20 : '',
         CREATE_USER: userName
       });
 
@@ -824,30 +957,66 @@ if (payload.orderTypeCode === 'ZSV1') {
       let soapResponse = null;
       let externalTicketNumber = null;
 
-      try {
-        soapResponse = await createHisenseOrder({
-          payload: soapPayload,
-          ticketId: t.id,
-          ticketNumber: t.ticketNumber,
-          orderTypeCode: t.orderTypeCode
-        });
+      // try {
+      //   soapResponse = await createHisenseOrder({
+      //     payload: soapPayload,
+      //     ticketId: t.id,
+      //     ticketNumber: t.ticketNumber,
+      //     orderTypeCode: t.orderTypeCode
+      //   });
 
-        if (soapResponse.success && soapResponse.objectId) {
-          externalTicketNumber = soapResponse.objectId;
-          soapStatus = 'SUCCESS';
+      //   if (soapResponse.success && soapResponse.objectId) {
+      //     externalTicketNumber = soapResponse.objectId;
+      //     soapStatus = 'SUCCESS';
 
-          await connection.execute(
-            `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
-            [externalTicketNumber, t.id]
-          );
-        } else {
-          // SAP returned but without success — still "FAILED"
-          soapError = soapResponse?.message || 'SAP returned without objectId';
-        }
-      } catch (soapErr) {
-        soapError = soapErr.message;
-      }
+      //     await connection.execute(
+      //       `UPDATE tickets SET external_ticket_number = ? WHERE id = ?`,
+      //       [externalTicketNumber, t.id]
+      //     );
+      //   } else {
+      //     // SAP returned but without success — still "FAILED"
+      //     soapError = soapResponse?.message || 'SAP returned without objectId';
+      //   }
+      // } catch (soapErr) {
+      //   soapError = soapErr.message;
+      // }
     }
+
+    // ✅ FINALIZE TRANSFER USING ticketId
+if (
+  frontendPayload.ticketId &&
+  frontendPayload.isTransferred === false
+) {
+  const parentTicketId = frontendPayload.ticketId;
+
+  // 1. Validate parent
+  const [parent] = await connection.execute(
+    `SELECT is_transferred, transfer_status 
+     FROM tickets 
+     WHERE id = ? 
+     LIMIT 1`,
+    [parentTicketId]
+  );
+
+  if (parent.length && parent[0].is_transferred) {
+
+    // 2. Mark completed
+    await connection.execute(
+      `UPDATE tickets 
+       SET transfer_status = 'COMPLETED'
+       WHERE id = ?`,
+      [parentTicketId]
+    );
+
+    // 3. Link child → parent
+    await connection.execute(
+      `UPDATE tickets 
+       SET parent_ticket_id = ?
+       WHERE id = ?`,
+      [parentTicketId, ticketId]
+    );
+  }
+}
 
     await connection.commit();
 
@@ -1827,6 +1996,22 @@ exports.getTicketFullDetails = async (ticketId, field) => {
         -- Hisense Product Code
         pi.product_code AS PRODUCT_ID_HISENSE,
 
+        -- Product Hierarchy
+  cm.id AS customer_model_id,
+  cm.model_number,
+
+  ms.id AS model_spec_id,
+  ms.spec_value,
+
+  sc.id AS sub_category_id,
+  sc.name AS sub_category_name,
+  sc.code AS sub_category_code,
+
+  cat.id AS category_id,
+  cat.name AS category_name,
+  cat.code AS category_code,
+
+
         -- Masters
         ot.order_type AS order_type_code,
         ot.order_type_name,
@@ -1868,6 +2053,11 @@ exports.getTicketFullDetails = async (ticketId, field) => {
       JOIN customers c ON c.id = t.customer_id
       JOIN customer_products cp ON cp.id = t.customer_product_id
       LEFT JOIN product_ids pi ON pi.id = cp.product_id
+
+      LEFT JOIN customer_models cm ON cm.id = pi.customer_model_id
+LEFT JOIN model_specifications ms ON ms.id = cm.model_spec_id
+LEFT JOIN sub_categories sc ON sc.id = ms.sub_category_id
+LEFT JOIN categories cat ON cat.id = sc.category_id
 
       LEFT JOIN order_type_master ot ON ot.id = t.order_type_id
       LEFT JOIN order_source_master os ON os.id = t.order_source_id
@@ -1920,6 +2110,20 @@ exports.getTicketFullDetails = async (ticketId, field) => {
         customerProductId: row.customer_product_id,
         productId: row.product_id,
         PRODUCT_ID_HISENSE: row.PRODUCT_ID_HISENSE,
+          customerModelId: row.customer_model_id,
+  customerModel: row.model_number,
+
+  modelSpecId: row.model_spec_id,
+  modelSpecification: row.spec_value,
+
+  subCategoryId: row.sub_category_id,
+  subCategory: row.sub_category_name,
+  subCategoryCode: row.sub_category_code,
+
+  categoryId: row.category_id,
+  category: row.category_name,
+  categoryCode: row.category_code,
+
         serialNo: row.serial_no,
         serialNoAlt: row.serial_no_alt,
         purchaseDate: row.purchase_date,

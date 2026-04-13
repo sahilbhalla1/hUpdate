@@ -14,6 +14,8 @@ import SubCategories from "../pages/Product_Master/SubCategories";
 import ModelSpecifications from "../pages/Product_Master/ModelSpecifications";
 import CustomerModels from "../pages/Product_Master/CustomerModels";
 import Products from "../pages/Product_Master/Products";
+import Consulting_Tracking from "../pages/Consulting_Tracking/Consulting_Tracking";
+import Transfer_Ticket from "../pages/Transfer_Tickets/Transfer_Tickets";
 
 export const dashboardRoutes = [
   {
@@ -91,5 +93,15 @@ export const dashboardRoutes = [
   {
     path: "*",
     element: <NotFound />,
+  },
+  {
+    path: "/consulting-tracking",
+    element: <Consulting_Tracking/>,
+    roles: [ROLES.ADMIN, ROLES.L1],
+  },
+   {
+    path: "/transfer-ticket",
+    element: <Transfer_Ticket/>,
+    roles: [ROLES.ADMIN, ROLES.L1],
   },
 ];

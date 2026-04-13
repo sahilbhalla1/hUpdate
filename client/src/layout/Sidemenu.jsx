@@ -14,7 +14,7 @@ import {
   LayoutGrid,
   Layers,
   Settings2,
-  Package,
+  Package,ArrowRightLeft
 } from "lucide-react";
 import { isAuth } from "../utils/helpers";
 
@@ -119,6 +119,20 @@ const Sidemenu = ({ isOpen }) => {
       // submenu: [{ path: "/tickets/create", label: "Create Ticket" }],
       path: "/tickets/create"
     },
+           {
+      id: "consulting",
+      label: "Consulting Tracking",
+      path: "/consulting-tracking",
+      icon: <Activity size={16} />,
+      allowedRoles: ["ADMIN", "L1"],
+    },
+      {
+      id: "transfer-ticket",
+      label: "Transfer Ticket",
+      path: "/transfer-ticket",
+      icon: <ArrowRightLeft size={16} />,
+      allowedRoles: ["ADMIN", "L1"],
+    },
     {
       id: "service-tracking",
       label: "Service Tracking",
@@ -128,7 +142,7 @@ const Sidemenu = ({ isOpen }) => {
     },
     {
       id: "complaint-escalation",
-      label: "Complaint/Escalation",
+      label: "Escalation",
       path: "/complaint-escalation",
       icon: <MessageCircleWarning size={16} />,
       allowedRoles: ["ADMIN", "L3"],
@@ -140,6 +154,7 @@ const Sidemenu = ({ isOpen }) => {
       icon: <ClipboardCheck size={16} />,
       allowedRoles: ["ADMIN", "INTERNAL"],
     },
+
     {
       id: "techvalidationexternal",
       label: "Tech Validation (External)",

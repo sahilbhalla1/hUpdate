@@ -32,6 +32,8 @@ export default function CreateTicket() {
     STAGE: "",
     STAGE_CODE: "",
     STAGE_ID: "",
+
+    IS_TRANSFER: null,  // ✅ ADD THIS
     END_Socials: {},
 
     // customer
@@ -255,6 +257,11 @@ useEffect(() => {
 
   const isL2 = searchParams.get("l2") === "true";
   const isL3 = searchParams.get("l3") === "true";
+  const isConsulting = searchParams.get("consulting") === "true";
+  const isTransfer = searchParams.get("tranferticket") === "true";
+
+  
+
   const urlTicketId = searchParams.get("id");
 
   const bindTicketData = ({ customer, product, ticket: ticketData }, { successMessage, ticketId }) => {
@@ -286,9 +293,17 @@ useEffect(() => {
       END_ADDRESS2: customer.addressLine2 || "",
       END_ADDRESS3: customer.addressLine3 || "",
       // ── Product ───────────────────────────────────────────────────────────
-      ...(matchedProduct ? { Category: matchedProduct.category || "", CATEGORY_ID: matchedProduct.categoryId || "" } : {}),
+      // ...(matchedProduct ? { Category: matchedProduct.category || "", CATEGORY_ID: matchedProduct.categoryId || "" } : {}),
       customerProductId: product.customerProductId,
       PRODUCT_ID_HISENSE: product.PRODUCT_ID_HISENSE,
+      Category: product.category || "",
+CATEGORY_ID: product.categoryId || "",
+
+SUB_CATEGORY_ID: product.subCategoryId || "",
+MODEL_SPEC_ID: product.modelSpecId || "",
+CUSTOMER_MODEL_ID: product.customerModelId || "",
+
+customerProductId: product.customerProductId,
       PRODUCT_ID: product.productId,
       SERIALNO: product.serialNo,
       SERIALNO1: product.serialNoAlt || "",
@@ -337,6 +352,7 @@ useEffect(() => {
       STAGE_ID: ticketData.stageId,
       STAGE_CODE: ticketData.stageCode || "",
       STAGE: ticketData.stage || "",
+     IS_TRANSFER: isTransfer ? false : Boolean(ticketData.isTransferred),// ✅ ADD THIS
       ASSIGN_DATE: ticketData.assignDate?.split("T")[0] || prev.ASSIGN_DATE,
       problem_note: ticketData.problemNote || "",
       agent_remarks: "",
@@ -357,7 +373,8 @@ useEffect(() => {
     setSearchQuery(customer.primaryPhone);
     fetchTicketHistoryByPhone(customer.primaryPhone);
     setSelectedTicketId(ticketId ?? ticketData.id);
-    setIsTicketReadOnly(true);
+    // setIsTicketReadOnly(true);
+    setIsTicketReadOnly(!isTransfer);
     if (successMessage) toast.success(successMessage);
   };
 
@@ -415,7 +432,7 @@ useEffect(() => {
 
   // Auto-load ticket details when navigated from ServiceTracking with ?id=X&l2=true or l3=true
   useEffect(() => {
-    if (!urlTicketId || (!isL2 && !isL3)) return;
+    if (!urlTicketId || (!isL2 && !isL3 && !isConsulting && !isTransfer)) return;
 
     const loadTicketFromUrl = async () => {
       try {
@@ -436,7 +453,7 @@ useEffect(() => {
     };
 
     loadTicketFromUrl();
-  }, [urlTicketId, isL2, isL3]);
+  }, [urlTicketId, isL2, isL3,isConsulting, isTransfer]);
 
   const clearTicketSelection = () => {
     const phoneFromUrl = searchParams.get("phone");
@@ -1007,37 +1024,22 @@ setSelectedSrExternal("");
     const fetchMasterData = async () => {
       try {
         setServiceTypesLoading(true);
-        setOrderSourceLoading(true);
+        // setOrderSourceLoading(true);
         setOrderTypeLoading(true);
 
-        const [resService, resSource, resOrderType] = await Promise.all([
-          api.get("/service-type"),
-          api.get("/order-source"),
-          api.get("/order-type"),
-        ]);
+       const [resService, resOrderType] = await Promise.all([
+        api.get("/service-type"),
+        api.get("/order-type"),
+      ]);
 
         if (resService.data.success) setServiceTypes(resService.data.data);
-        if (resSource.data.success) {
-          const sources = resSource.data.data;
-          setOrderSources(sources);
-
-          // 🔥 Logic for URL Parameter Auto-Selection
-          const phoneFromUrl = searchParams.get("phone");
-          if (phoneFromUrl) {
-            // Find the specific object for Call Center
-            const callCenter = sources.find((s) => s.source_name === "Call Center/Telephone");
-            if (callCenter) {
-              setValues((prev) => ({
-                ...prev,
-                ORDER_SOURCE: callCenter.source_name,
-                ORDER_SOURCE_CODE: callCenter.source_code,
-                ORDER_SOURCE_ID: callCenter.id,
-              }));
-            }
-          }
-           fetchExistingSR(phoneFromUrl);
-        }
         if (resOrderType.data.success) setOrderTypes(resOrderType.data.data);
+
+         const phoneFromUrl = searchParams.get("phone");
+      if (phoneFromUrl) {
+        fetchExistingSR(phoneFromUrl);
+      }
+
       } catch (err) {
         console.error("Master Data Fetch Error:", err);
         toast.error("Failed to load form options");
@@ -1049,6 +1051,54 @@ setSelectedSrExternal("");
     };
     fetchMasterData();
   }, []);
+
+  
+//order source
+useEffect(() => {
+  const fetchOrderSources = async () => {
+    try {
+      setOrderSourceLoading(true);
+
+      let url = "/order-source";
+
+      // ✅ Pass orderType (backend handles default ZSV1)
+      if (values.ORDER_TYPE_CODE) {
+        url += `?orderType=${values.ORDER_TYPE_CODE}`;
+      }
+
+      const res = await api.get(url);
+
+      if (res.data.success) {
+        const sources = res.data.data;
+        setOrderSources(sources);
+
+        // 🔥 Auto-select Call Center (moved here)
+        const phoneFromUrl = searchParams.get("phone");
+        if (phoneFromUrl) {
+          const callCenter = sources.find(
+            (s) => s.source_name === "Call Center/Telephone"
+          );
+
+          if (callCenter) {
+            setValues((prev) => ({
+              ...prev,
+              ORDER_SOURCE: callCenter.source_name,
+              ORDER_SOURCE_CODE: callCenter.source_code,
+              ORDER_SOURCE_ID: callCenter.id,
+            }));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Order Source Fetch Error:", err);
+      toast.error("Failed to load order sources");
+    } finally {
+      setOrderSourceLoading(false);
+    }
+  };
+
+  fetchOrderSources();
+}, [values.ORDER_TYPE_CODE]);
 
   useEffect(() => {
     const fetchSymptomsL1 = async () => {
@@ -1221,13 +1271,18 @@ setSelectedSrExternal("");
     }
     if (name === "ORDER_TYPE") {
       const orderTypObj = orderTypes.find((item) => item.order_type === value);
-console.log(orderTypObj);
+// console.log(orderTypObj);
 
       setValues((prev) => ({
         ...prev,
         ORDER_TYPE_CODE: value,
         ORDER_TYPE: orderTypObj?.order_type_name || "",
         ORDER_TYPE_ID: orderTypObj?.id || "",
+
+        ORDER_SOURCE: "",
+    ORDER_SOURCE_CODE: "",
+    ORDER_SOURCE_ID: "",
+
         STATUS: "",
         STATUS_CODE: "",
         STAGE: "",
@@ -1238,6 +1293,7 @@ console.log(orderTypObj);
         COMPLAINT_TYPE: "",
         COMPLAINT_TYPE_CODE: "",
         COMPLAINT_TYPE_ID: "",
+        
         TICKET_STAGE: "",
         TICKET_STAGE_CODE: "",
         // Reset Section
@@ -1930,12 +1986,7 @@ useEffect(() => {
   return;
 }
 
-    // Email format validation
-    // if (!validateEmail(values.END_EMAIL)) {
-    //   toast.error("Cannot save: Invalid Email Address");
-    //   return;
-    // }
-
+   
     // --- Validation: Province must be 2 digits if zipcode is present ---
     if (values.END_ZIP_CODE) {
       const zipcode = String(values.END_ZIP_CODE).trim();
@@ -2012,6 +2063,11 @@ useEffect(() => {
       return;
     }
 
+    if (values.IS_TRANSFER === null || values.IS_TRANSFER === undefined) {
+      toast.error("Is Transfer is mandatory");
+      return;
+    }
+
     // --- Mandatory: Agent Remarks (always) ---
     if (!values.agent_remarks?.trim()) {
       toast.error("Agent Remarks are mandatory");
@@ -2058,16 +2114,18 @@ useEffect(() => {
       Object.entries(values.END_Socials || {}).filter(([_, v]) => typeof v === "string" && v.trim() !== ""),
     );
     // const finalPayload = { ...values, END_Socials: cleanedSocials };
+    const { IS_TRANSFER, ...rest } = values;
     const finalPayload = {
-  ...values,
-  END_Socials: cleanedSocials,
-  srMode,
-  srExternalTicket: selectedSrExternal || null,
-  END_EMAIL: values.END_EMAIL?.trim() ? values.END_EMAIL : "xyz@gmail.com",
-};
+      ...rest,
+      isTransferred: IS_TRANSFER, // ✅ renamed
+      END_Socials: cleanedSocials,
+      srMode,
+      srExternalTicket: selectedSrExternal || null,
+      END_EMAIL: values.END_EMAIL?.trim() ? values.END_EMAIL : "xyz@gmail.com",
+    };
 
     // --- UPDATE flow: ticket selected from history AND IS_CONSULTING is false ---
-    if (selectedTicketId) {
+    if (selectedTicketId && !isTransfer) {
       try {
         setLoading(true);
         await api.patch(`/tickets/${selectedTicketId}/agent-remark`, {
@@ -2315,6 +2373,16 @@ useEffect(() => {
     "Consulting": ticketHistory.filter(t => t.order_type_name === "Consulting"),
     "Complaint": ticketHistory.filter(t => t.order_type_name === "Escalation"),
   };
+
+useEffect(() => {
+  if (isTransfer) {
+    setValues((prev) => ({
+      ...prev,
+      IS_TRANSFER: false,
+    }));
+  }
+}, [isTransfer]);
+
 
   return (
     <div className="bg-linear-to-br from-gray-50 to-blue-50">
@@ -2883,6 +2951,19 @@ useEffect(() => {
             <SectionHeader icon={Headphones} title="Agent Input" />
             <div className="grid grid-cols-2 gap-2">
               <FormField label="HCRM ID" name="HCRM_ID" disabled value={values?.externalTicketNumber} onChange={handleChange} />
+               <FormField
+                label="Order Type"
+                name="ORDER_TYPE"
+                type="select"
+                options={orderTypes.map((item) => ({
+                  label: item.order_type_name,
+                  value: item.order_type, // Using code as value to fix duplicate key issues
+                }))}
+                required
+                disabled={orderTypeLoading || isTicketReadOnly}
+                value={values.ORDER_TYPE_CODE}
+                onChange={handleChange}
+              />
               <FormField
                 label="Order Source"
                 name="ORDER_SOURCE"
@@ -2896,19 +2977,7 @@ useEffect(() => {
                 value={values.ORDER_SOURCE_CODE}
                 onChange={handleChange}
               />
-              <FormField
-                label="Order Type"
-                name="ORDER_TYPE"
-                type="select"
-                options={orderTypes.map((item) => ({
-                  label: item.order_type_name,
-                  value: item.order_type, // Using code as value to fix duplicate key issues
-                }))}
-                required
-                disabled={orderTypeLoading || isTicketReadOnly}
-                value={values.ORDER_TYPE_CODE}
-                onChange={handleChange}
-              />
+             
               
               {(isL2 || isL3) && (
                 <div className="col-span-2 flex items-center gap-2 px-1 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
@@ -3164,6 +3233,25 @@ useEffect(() => {
                 value={values.STAGE || ""}
               />
             )}
+
+            <FormField
+              label="Is Transfer"
+              name="IS_TRANSFER"
+              type="select"
+              required
+              options={[
+                { label: "Yes", value: "true" },
+                { label: "No", value: "false" },
+              ]}
+              value={values.IS_TRANSFER === null ? "" : String(values.IS_TRANSFER)}
+              onChange={(e) =>
+                setValues((prev) => ({
+                  ...prev,
+                  IS_TRANSFER: e.target.value === "true"
+                }))
+              }
+             disabled={isTicketReadOnly || isTransfer}
+            />
             {(isL2 || isL3) && (
               <div className="col-span-2">
                 <label className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide block mb-1.5">
@@ -3427,15 +3515,18 @@ useEffect(() => {
             {/* <SecondaryButton onClick={() => navigate(-1)} type="button">
               Discard
             </SecondaryButton> */}
-            <PrimaryButton type="submit" disabled={loading || isSaved}>
-              {loading ? (
-                <CircularProgress size={17} color="inherit" />
-              ) : (
-                <>
-                  <Save size={17} className="mr-2" /> {selectedTicketId && !values.IS_CONSULTING ? "Update Ticket" : "Save Ticket"}
-                </>
-              )}
-            </PrimaryButton>
+          <PrimaryButton type="submit" disabled={loading || isSaved}>
+  {loading ? (
+    <CircularProgress size={17} color="inherit" />
+  ) : (
+    <>
+      <Save size={17} className="mr-2" />
+      {selectedTicketId && !values.IS_CONSULTING && !isTransfer
+        ? "Update Ticket"
+        : "Save Ticket"}
+    </>
+  )}
+</PrimaryButton>
           </div>
         </div>
       </form>
